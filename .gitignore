@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.env
+
+# Credenciales sensibles
+backend/firebase-credentials.json
+backend/*.json
+clients/sara_mobile/android/app/google-services.json
+
+# Flutter
+clients/sara_mobile/.dart_tool/
+clients/sara_mobile/.flutter-plugins
+clients/sara_mobile/.flutter-plugins-dependencies
+clients/sara_mobile/build/
+clients/sara_mobile/.packages
+clients/sara_mobile/pubspec.lock
+
+# Node
+node_modules/
+clients/web/.next/
+clients/web/node_modules/
+clients/desktop/node_modules/
+clients/desktop/dist/
+clients/desktop/.vite/
+.next/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

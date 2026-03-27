@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Nocturne Slate
+   Primary:   #ECEFF1
+   Secondary: #455A64
+   Tertiary:  #78909C
+   Neutral:   #1A1C1E
+*/
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: #111315;
+  color: #ECEFF1;
+  font-family: 'Inter', 'SF Pro Text', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  height: 100%;
+}
+
+textarea::placeholder, input::placeholder { color: #37474F; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #263238; border-radius: 2px; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg-enter { animation: fadeUp 0.18s ease-out; }
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.25; }
+  50%       { transform: translateY(-4px); opacity: 0.85; }
+}
