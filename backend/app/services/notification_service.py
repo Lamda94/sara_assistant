@@ -102,12 +102,16 @@ async def check_and_fire_reminders():
 
 
 def start_scheduler():
-    """Inicia el scheduler de recordatorios."""
+    """Inicia el scheduler: recordatorios (cada 30s) + consolidación nocturna (3am)."""
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+    from app.services.consolidation_service import daily_consolidation
 
     _init_firebase()
 
     scheduler = AsyncIOScheduler(timezone="America/Bogota")
+
+    # Recordatorios — cada 30 segundos
     scheduler.add_job(
         check_and_fire_reminders,
         trigger="interval",
@@ -115,6 +119,15 @@ def start_scheduler():
         id="reminder_check",
         replace_existing=True,
     )
+
+    # Consolidación nocturna — todos los días a las 3:00am
+    scheduler.add_job(
+        daily_consolidation,
+        trigger=CronTrigger(hour=3, minute=0, timezone="America/Bogota"),
+        id="nightly_consolidation",
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("Scheduler de recordatorios iniciado (cada 30s)")
+    logger.info("Scheduler iniciado: recordatorios (30s) + consolidación (3am)")
     return scheduler

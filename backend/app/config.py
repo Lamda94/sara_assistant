@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     memory_top_k: int = 5
     public_url: str = "http://localhost:8000"
     firebase_credentials_path: str = ""
-    mem0_api_key: str = ""  # Si está definida, usa Mem0 cloud; si no, modo local
+    mem0_api_key: str = ""            # vacío = modo local, definido = Mem0 cloud
+    google_credentials_path: str = "" # para CalendarAgent y EmailAgent
+    file_agent_root: str = ""         # directorio raíz que FileAgent puede leer
 
     class Config:
         env_file = ".env"

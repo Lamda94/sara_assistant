@@ -76,6 +76,38 @@ _KW_SEARCH = (
     "tasa de cambio", "últimas noticias", "qué pasó", "que paso",
 )
 
+_KW_CODE = (
+    "genera código", "escribe código", "crea una función", "escribe una función",
+    "crea un script", "escribe un script", "genera un programa", "escribe un programa",
+    "crea una clase", "escribe una clase", "crea un módulo",
+    "depura", "depurar", "debug", "hay un error en", "este error",
+    "explica este código", "qué hace este código", "que hace este codigo",
+    "refactoriza", "refactorizar", "optimiza este código",
+    "en python:", "en javascript:", "en dart:", "en typescript:", "en kotlin:",
+)
+
+_KW_FILE = (
+    "lee el archivo", "leer el archivo", "abre el archivo", "abrir el archivo",
+    "muéstrame el archivo", "muestrame el archivo",
+    "lista los archivos", "lista archivos", "qué archivos", "que archivos",
+    "busca en el archivo", "busca en mis archivos", "buscar en archivos",
+    "contenido del archivo", "leer fichero",
+)
+
+_KW_CALENDAR = (
+    "calendario", "google calendar", "mis eventos", "eventos de hoy",
+    "eventos de mañana", "qué tengo en el calendario", "que tengo en el calendario",
+    "añadir al calendario", "agregar al calendario", "crear evento",
+    "cita en el calendario",
+)
+
+_KW_EMAIL = (
+    "correos", "emails", "bandeja de entrada", "inbox", "mis correos",
+    "correo nuevo", "correos sin leer", "redacta un correo", "redactar correo",
+    "envía un correo", "enviar correo", "envía un email", "enviar email",
+    "lee mi correo", "leer correo", "ver correos", "gmail",
+)
+
 
 def _intent(message: str) -> str:
     msg = message.lower().strip()
@@ -93,6 +125,22 @@ def _intent(message: str) -> str:
     # Crear: verbos específicos de creación
     if any(kw in msg for kw in _KW_CREATE):
         return "create_reminder"
+
+    # Código
+    if any(kw in msg for kw in _KW_CODE):
+        return "code"
+
+    # Archivos
+    if any(kw in msg for kw in _KW_FILE):
+        return "file"
+
+    # Calendario
+    if any(kw in msg for kw in _KW_CALENDAR):
+        return "calendar"
+
+    # Email
+    if any(kw in msg for kw in _KW_EMAIL):
+        return "email"
 
     # Búsqueda web (antes de lista, para que "precio mañana" no sea list)
     if any(kw in msg for kw in _KW_SEARCH):
@@ -301,7 +349,7 @@ async def _parse_reminder(message: str) -> tuple[str, datetime] | None:
         return None
 
 
-# ── Búsqueda web ──────────────────────────────────────────────────────────────
+# ── Agentes externos ──────────────────────────────────────────────────────────
 
 async def _web_search(query: str) -> str:
     from app.agents.web_search import WebSearchAgent
@@ -310,6 +358,66 @@ async def _web_search(query: str) -> str:
         return result if result and "No se encontraron" not in result else ""
     except Exception:
         return ""
+
+
+async def _run_code_agent(message: str) -> str:
+    from app.agents.code_agent import CodeAgent
+    # Detectar lenguaje mencionado en el mensaje
+    lang = "python"
+    for l in ("javascript", "typescript", "dart", "kotlin", "go", "rust", "java", "bash"):
+        if l in message.lower():
+            lang = l
+            break
+    try:
+        return await CodeAgent().run(task=message, language=lang)
+    except Exception as e:
+        return f"Error en CodeAgent: {e}"
+
+
+async def _run_file_agent(message: str) -> str:
+    from app.agents.file_agent import FileAgent
+    msg = message.lower()
+    if any(k in msg for k in ("lista", "qué archivos", "que archivos", "listar")):
+        action = "list"
+    elif any(k in msg for k in ("busca en", "buscar en", "busca el texto")):
+        action = "search"
+    else:
+        action = "read"
+
+    # Intento extraer ruta del mensaje (entre comillas o después de "archivo")
+    import re
+    path_match = re.search(r'["\']([^"\']+)["\']', message)
+    path = path_match.group(1) if path_match else ""
+
+    try:
+        return await FileAgent().run(action=action, path=path, query=message)
+    except Exception as e:
+        return f"Error en FileAgent: {e}"
+
+
+async def _run_calendar_agent(message: str) -> str:
+    from app.agents.calendar_agent import CalendarAgent
+    msg = message.lower()
+    action = "create" if any(k in msg for k in ("añadir", "agregar", "crear evento", "nueva cita")) else "list"
+    try:
+        return await CalendarAgent().run(action=action)
+    except Exception as e:
+        return f"Error en CalendarAgent: {e}"
+
+
+async def _run_email_agent(message: str) -> str:
+    from app.agents.email_agent import EmailAgent
+    msg = message.lower()
+    if any(k in msg for k in ("envía", "enviar", "redacta", "mandar")):
+        action = "send"
+    elif any(k in msg for k in ("lee", "leer", "abre", "abrir", "muéstrame")):
+        action = "read"
+    else:
+        action = "list"
+    try:
+        return await EmailAgent().run(action=action)
+    except Exception as e:
+        return f"Error en EmailAgent: {e}"
 
 
 # ── Función principal ─────────────────────────────────────────────────────────
@@ -364,6 +472,20 @@ async def chat(message: str, session_id: str, device: str = "cli") -> str:
     elif intent == "list_reminders":
         day = _list_day_filter(message)
         direct_answer = await _db_list_reminders(session_id, day=day)
+
+    elif intent == "code":
+        direct_answer = await _run_code_agent(message)
+
+    elif intent == "file":
+        direct_answer = await _run_file_agent(message)
+
+    elif intent == "calendar":
+        result = await _run_calendar_agent(message)
+        action_context = f"\n\n[Calendario]\n{result}"
+
+    elif intent == "email":
+        result = await _run_email_agent(message)
+        action_context = f"\n\n[Email]\n{result}"
 
     elif intent == "web_search":
         result = await _web_search(message)
