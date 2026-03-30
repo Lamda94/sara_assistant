@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { Send, Search, MoreVertical, X } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Send, Search, MoreVertical, X, Mic, MicOff } from 'lucide-react'
 import './index.css'
 
 const BACKEND = window.sara?.backendUrl ?? 'http://localhost:8000'
@@ -70,8 +70,12 @@ export default function App() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [sessionActive, setSessionActive] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [voiceEnabled, setVoiceEnabled] = useState(true)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const recognitionRef = useRef(null)
+  const synthRef = useRef(window.speechSynthesis)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -80,10 +84,58 @@ export default function App() {
   useEffect(() => { inputRef.current?.focus() }, [])
 
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') window.sara?.hideWindow() }
+    const handler = (e) => {
+      if (e.key === 'Escape') window.sara?.hideWindow()
+      if (e.ctrlKey && e.key === 'm') { e.preventDefault(); toggleListen() }
+    }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
+
+  // Inicializar SpeechRecognition
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) return
+    const rec = new SR()
+    rec.lang = 'es-ES'
+    rec.continuous = false
+    rec.interimResults = false
+    rec.onresult = (e) => {
+      const transcript = e.results[0][0].transcript
+      setInput(transcript)
+      setIsListening(false)
+    }
+    rec.onerror = () => setIsListening(false)
+    rec.onend = () => setIsListening(false)
+    recognitionRef.current = rec
+  }, [])
+
+  const toggleListen = useCallback(() => {
+    if (!recognitionRef.current) return
+    if (isListening) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    } else {
+      synthRef.current?.cancel()
+      recognitionRef.current.start()
+      setIsListening(true)
+    }
+  }, [isListening])
+
+  const speak = useCallback((text) => {
+    if (!voiceEnabled || !synthRef.current) return
+    synthRef.current.cancel()
+    const utt = new SpeechSynthesisUtterance(text)
+    utt.lang = 'es-ES'
+    utt.rate = 1.05
+    utt.pitch = 1.0
+    // Preferir voz femenina en español si está disponible
+    const voices = synthRef.current.getVoices()
+    const esVoice = voices.find(v => v.lang.startsWith('es') && v.name.toLowerCase().includes('female'))
+      || voices.find(v => v.lang.startsWith('es'))
+    if (esVoice) utt.voice = esVoice
+    synthRef.current.speak(utt)
+  }, [voiceEnabled])
 
   const sendMessage = async () => {
     const text = input.trim()
@@ -117,6 +169,7 @@ export default function App() {
           ? { ...m, content: data.response, typing: false, device: DEVICE, time: getTime() }
           : m
       ))
+      speak(data.response)
     } catch {
       setMessages(prev => prev.map(m =>
         m.id === thinkingId
@@ -150,6 +203,13 @@ export default function App() {
             <div className="header-actions">
               <button className="icon-btn" title="Buscar">
                 <Search size={13} strokeWidth={1.8} />
+              </button>
+              <button
+                className={`icon-btn${voiceEnabled ? ' active' : ''}`}
+                title={voiceEnabled ? 'Voz activa (click para silenciar)' : 'Voz silenciada'}
+                onClick={() => { setVoiceEnabled(v => !v); synthRef.current?.cancel() }}
+              >
+                {voiceEnabled ? <Mic size={13} strokeWidth={1.8} /> : <MicOff size={13} strokeWidth={1.8} />}
               </button>
               <button className="icon-btn" title="Más opciones">
                 <MoreVertical size={13} strokeWidth={1.8} />
@@ -190,6 +250,14 @@ export default function App() {
               />
               <div className="compose-actions">
                 <button
+                  onMouseDown={toggleListen}
+                  className={`send-btn mic-btn${isListening ? ' listening' : ''}`}
+                  title="Hablar (Ctrl+M)"
+                  style={{ marginRight: 4 }}
+                >
+                  <Mic size={12} strokeWidth={2} />
+                </button>
+                <button
                   onClick={sendMessage}
                   disabled={!input.trim() || loading}
                   className="send-btn"
@@ -199,7 +267,7 @@ export default function App() {
               </div>
             </div>
           </div>
-          <div className="hint">↵ enviar &nbsp;·&nbsp; Esc ocultar &nbsp;·&nbsp; Ctrl+Space abrir</div>
+          <div className="hint">↵ enviar &nbsp;·&nbsp; Ctrl+M voz &nbsp;·&nbsp; Esc ocultar</div>
         </div>
 
       </div>

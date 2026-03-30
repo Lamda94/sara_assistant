@@ -43,6 +43,8 @@ dependencies:
   sqflite: ^2.3.3
   connectivity_plus: ^6.1.4
   path: ^1.9.0
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.1.0
 
 dev_dependencies:
   flutter_test:

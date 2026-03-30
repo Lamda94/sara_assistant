@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import '../api.dart';
 import '../theme.dart';
 import '../widgets/message_bubble.dart';
@@ -17,9 +19,14 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<ChatMessage> _messages = [];
   final TextEditingController _ctrl = TextEditingController();
   final ScrollController _scroll = ScrollController();
+  final SpeechToText _stt = SpeechToText();
+  final FlutterTts _tts = FlutterTts();
   int _pendingCount = 0;
   bool _sessionActive = false;
   bool _isOnline = true;
+  bool _isListening = false;
+  bool _sttAvailable = false;
+  bool _voiceEnabled = true;
   StreamSubscription<bool>? _connectivitySub;
 
   bool get _loading => _pendingCount > 0;
@@ -28,6 +35,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
 
+    _initVoice();
     _isOnline = SyncService().isOnline;
 
     // Escuchar cambios de conectividad
@@ -70,10 +78,55 @@ class _ChatScreenState extends State<ChatScreen> {
     ));
   }
 
+  Future<void> _initVoice() async {
+    _sttAvailable = await _stt.initialize(
+      onError: (_) => setState(() => _isListening = false),
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
+          setState(() => _isListening = false);
+        }
+      },
+    );
+    await _tts.setLanguage('es-CO');
+    await _tts.setSpeechRate(0.5);
+    await _tts.setPitch(1.0);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleListen() async {
+    if (!_sttAvailable) return;
+    if (_isListening) {
+      await _stt.stop();
+      setState(() => _isListening = false);
+    } else {
+      await _tts.stop();
+      setState(() => _isListening = true);
+      await _stt.listen(
+        localeId: 'es_CO',
+        listenFor: const Duration(seconds: 20),
+        pauseFor: const Duration(seconds: 3),
+        onResult: (result) {
+          if (result.finalResult) {
+            _ctrl.text = result.recognizedWords;
+            setState(() => _isListening = false);
+          }
+        },
+      );
+    }
+  }
+
+  Future<void> _speak(String text) async {
+    if (!_voiceEnabled) return;
+    await _tts.stop();
+    await _tts.speak(text);
+  }
+
   @override
   void dispose() {
     _connectivitySub?.cancel();
     SyncService().onMessageSynced = null;
+    _stt.stop();
+    _tts.stop();
     _ctrl.dispose();
     _scroll.dispose();
     super.dispose();
@@ -151,6 +204,7 @@ class _ChatScreenState extends State<ChatScreen> {
               isTyping: false,
               device: kDevice,
             );
+            _speak(response);
           } else {
             // Sin conexión: reemplazar typing por placeholder
             _messages[idx] = _messages[idx].copyWith(
@@ -236,6 +290,18 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: Icon(
+              _voiceEnabled ? Icons.volume_up_outlined : Icons.volume_off_outlined,
+              size: 20,
+            ),
+            color: _voiceEnabled ? SaraColors.secondary : SaraColors.dim,
+            tooltip: _voiceEnabled ? 'Silenciar voz' : 'Activar voz',
+            onPressed: () {
+              setState(() => _voiceEnabled = !_voiceEnabled);
+              if (!_voiceEnabled) _tts.stop();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.psychology_outlined, size: 20),
             color: SaraColors.secondary,
@@ -331,6 +397,35 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
+                // Botón micrófono
+                if (_sttAvailable)
+                  GestureDetector(
+                    onTap: _toggleListen,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 46, height: 46,
+                      decoration: BoxDecoration(
+                        color: _isListening
+                            ? const Color(0xFFBF360C)
+                            : SaraColors.surface,
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(color: const Color(0x0FFFFFFF)),
+                        boxShadow: _isListening ? [
+                          BoxShadow(
+                            color: const Color(0xFFBF360C).withOpacity(0.4),
+                            blurRadius: 8,
+                          ),
+                        ] : null,
+                      ),
+                      child: Icon(
+                        _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                        size: 20,
+                        color: _isListening ? Colors.white : SaraColors.dim,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 6),
+                // Botón enviar
                 GestureDetector(
                   onTap: _send,
                   child: AnimatedContainer(

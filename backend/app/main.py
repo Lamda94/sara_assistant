@@ -10,7 +10,7 @@ from app.services.memory_service import init_collection
 from app.services.knowledge_service import init_kg_collection
 from app.services.notification_service import start_scheduler
 from app.routers import chat, memory, agents, knowledge
-from app.routers import notifications
+from app.routers import notifications, voice
 from app.config import settings
 
 _scheduler = None
@@ -49,6 +49,7 @@ app.include_router(memory.router)
 app.include_router(agents.router)
 app.include_router(knowledge.router)
 app.include_router(notifications.router)
+app.include_router(voice.router)
 
 
 @app.get("/health")
