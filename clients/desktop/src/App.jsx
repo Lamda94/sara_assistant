@@ -74,8 +74,8 @@ export default function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
-  const recognitionRef = useRef(null)
   const synthRef = useRef(window.speechSynthesis)
+  const sendMessageRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -92,33 +92,92 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Inicializar SpeechRecognition
-  useEffect(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) return
-    const rec = new SR()
-    rec.lang = 'es-ES'
-    rec.continuous = false
-    rec.interimResults = false
-    rec.onresult = (e) => {
-      const transcript = e.results[0][0].transcript
-      setInput(transcript)
-      setIsListening(false)
-    }
-    rec.onerror = () => setIsListening(false)
-    rec.onend = () => setIsListening(false)
-    recognitionRef.current = rec
-  }, [])
+  const mediaRecorderRef = useRef(null)
 
-  const toggleListen = useCallback(() => {
-    if (!recognitionRef.current) return
+  const toggleListen = useCallback(async () => {
+    // — PARAR —
     if (isListening) {
-      recognitionRef.current.stop()
-      setIsListening(false)
-    } else {
-      synthRef.current?.cancel()
-      recognitionRef.current.start()
+      const mr = mediaRecorderRef.current
+      if (mr && mr.state !== 'inactive') mr.stop()
+      return
+    }
+
+    // — INICIAR —
+    synthRef.current?.cancel()
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
+      // Elegir MIME type soportado por el navegador
+      const mimeType = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm', '']
+        .find(t => t === '' || MediaRecorder.isTypeSupported(t))
+
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {})
+      const chunks = []
+
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data)
+      }
+
+      mr.onstop = async () => {
+        // Liberar micrófono
+        stream.getTracks().forEach(t => t.stop())
+        window.sara?.micStop()
+        setIsListening(false)
+
+        if (chunks.length === 0) return
+
+        const finalMime = mr.mimeType || 'audio/webm'
+        const blob = new Blob(chunks, { type: finalMime })
+        if (blob.size < 500) return   // demasiado corto, ignorar
+
+        const ext = finalMime.includes('ogg') ? 'ogg' : 'webm'
+        try {
+          const form = new FormData()
+          form.append('audio', blob, `audio.${ext}`)
+          const res = await fetch(`${BACKEND}/voice/stt`, { method: 'POST', body: form })
+          const data = await res.json()
+          if (data.text) sendMessageRef.current(data.text)
+        } catch (err) {
+          console.error('STT error:', err)
+        }
+      }
+
+      mediaRecorderRef.current = mr
+      window.sara?.micStart()
+      mr.start(200)   // chunks cada 200ms
       setIsListening(true)
+
+      // Auto-parar tras 1.2s de silencio usando Web Audio API
+      const audioCtx = new AudioContext()
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 512
+      source.connect(analyser)
+      const buf = new Uint8Array(analyser.frequencyBinCount)
+      let silenceMs = 0
+      const THRESHOLD = 10   // nivel mínimo de sonido
+      const SILENCE_LIMIT = 1500  // ms de silencio para parar
+      const CHECK_INTERVAL = 100
+
+      const silenceTimer = setInterval(() => {
+        analyser.getByteFrequencyData(buf)
+        const avg = buf.reduce((a, b) => a + b, 0) / buf.length
+        if (avg < THRESHOLD) {
+          silenceMs += CHECK_INTERVAL
+          if (silenceMs >= SILENCE_LIMIT) {
+            clearInterval(silenceTimer)
+            audioCtx.close()
+            if (mediaRecorderRef.current?.state !== 'inactive') {
+              mediaRecorderRef.current.stop()
+            }
+          }
+        } else {
+          silenceMs = 0
+        }
+      }, CHECK_INTERVAL)
+    } catch (err) {
+      console.error('Mic error:', err)
+      setIsListening(false)
     }
   }, [isListening])
 
@@ -137,8 +196,8 @@ export default function App() {
     synthRef.current.speak(utt)
   }, [voiceEnabled])
 
-  const sendMessage = async () => {
-    const text = input.trim()
+  const sendMessage = async (overrideText) => {
+    const text = (overrideText ?? input).trim()
     if (!text || loading) return
 
     if (!sessionActive) setSessionActive(true)
@@ -188,6 +247,9 @@ export default function App() {
       sendMessage()
     }
   }
+
+  // Mantener ref actualizado en cada render para evitar closures stale
+  sendMessageRef.current = sendMessage
 
   return (
     <div className="shell">

@@ -16,13 +16,25 @@ from app.config import settings
 _scheduler = None
 
 
+def _preload_whisper():
+    try:
+        from app.routers.voice import _get_whisper
+        _get_whisper()
+        print("✓ Whisper precargado.")
+    except Exception as e:
+        print(f"Whisper preload skipped: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
     global _scheduler
     await init_db()
     await init_collection()
     await init_kg_collection()
     _scheduler = start_scheduler()
+    # Precargar Whisper en background para que el primer STT sea rápido
+    asyncio.create_task(asyncio.to_thread(_preload_whisper))
     print(f"✓ {settings.app_name} lista. Memoria vectorial y scheduler iniciados.")
     yield
     if _scheduler:

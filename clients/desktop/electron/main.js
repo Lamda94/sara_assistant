@@ -29,6 +29,14 @@ function createWindow() {
     },
   })
 
+  // Conceder acceso al micrófono (necesario para Web Speech API)
+  win.webContents.session.setPermissionRequestHandler(
+    (_wc, permission, callback) => callback(permission === 'media')
+  )
+  win.webContents.session.setPermissionCheckHandler(
+    (_wc, permission) => permission === 'media'
+  )
+
   if (isDev) {
     win.loadURL('http://localhost:5173').catch(() => {
       win.loadURL('http://localhost:5174')
@@ -41,9 +49,13 @@ function createWindow() {
     if (isDev) setTimeout(() => win.reload(), 1000)
   })
 
-  // Ocultar cuando pierde el foco
+  // Ocultar cuando pierde el foco (excepto si hay IPC diciendo que el mic está activo)
+  let micActive = false
+  ipcMain.on('mic-start', () => { micActive = true })
+  ipcMain.on('mic-stop',  () => { micActive = false })
+
   win.on('blur', () => {
-    if (isVisible) hideWindow()
+    if (isVisible && !micActive) hideWindow()
   })
 }
 

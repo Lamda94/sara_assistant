@@ -7,19 +7,46 @@ from app.config import settings
 from app.services.mem0_service import mem0_search, mem0_add
 from app.services.profile_service import get_profile, increment_and_check, generate_and_save_profile
 from app.services.knowledge_service import kg_get_context, kg_extract_and_store
+from app.services.proactivity_service import needs_morning_brief, mark_brief_sent, build_morning_context
 
 groq_client = AsyncGroq(api_key=settings.groq_api_key)
 
 CREATOR_ID = "lamda94"
 
-SYSTEM_BASE = """Eres SARA, un asistente virtual con memoria persistente.
-Eres directa y concisa. Responde siempre en el idioma del usuario.
-REGLA CRÍTICA: Solo informa acciones que aparezcan explícitamente en [Resultado de la acción] o [Datos de agenda]. Nunca inventes ni confirmes acciones que no estén en el contexto. Si no hay contexto de acción, no digas que hiciste algo."""
+_SYSTEM_BASE_TEMPLATE = """\
+Eres SARA, una asistente virtual inteligente, autónoma y con memoria persistente.
+Fecha y hora actual: {now}.
 
-SYSTEM_CREATOR = """Eres SARA, asistente virtual con memoria persistente.
-Quien te habla es lamda94, tu creador. Trátalo con respeto y formalidad, llámalo "señor".
-Sé directa y concisa. Responde siempre en el idioma del usuario.
-REGLA CRÍTICA: Solo informa acciones que aparezcan explícitamente en [Resultado de la acción] o [Datos de agenda]. Nunca inventes ni confirmes acciones que no estén en el contexto. Si no hay contexto de acción, no digas que hiciste algo."""
+Capacidades:
+- Tienes acceso a la fecha y hora actual, úsala para responder preguntas temporales.
+- Recuerdas hechos del usuario gracias a tu memoria persistente.
+- Puedes buscar en internet, gestionar recordatorios, leer archivos, acceder a Gmail y Google Calendar.
+- Puedes generar código en cualquier lenguaje.
+
+Comportamiento:
+- Responde siempre en el idioma del usuario.
+- Sé directa, concisa y natural — como una asistente personal real.
+- Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" si la información está en el contexto.
+- Cuando el contexto de acción muestre un resultado, preséntalo de forma clara. Si no hay resultado, no inventes uno.\
+"""
+
+_SYSTEM_CREATOR_TEMPLATE = """\
+Eres SARA, asistente virtual inteligente y autónoma con memoria persistente.
+Fecha y hora actual: {now}.
+Quien te habla es lamda94, tu creador. Trátalo con respeto, llámalo "señor".
+
+Capacidades:
+- Tienes acceso a la fecha y hora actual, úsala para responder preguntas temporales.
+- Recuerdas hechos del usuario gracias a tu memoria persistente.
+- Puedes buscar en internet, gestionar recordatorios, leer archivos, acceder a Gmail y Google Calendar.
+- Puedes generar código en cualquier lenguaje.
+
+Comportamiento:
+- Responde siempre en el idioma del usuario.
+- Sé directa, concisa y natural — como una asistente personal real.
+- Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" si la información está en el contexto.
+- Cuando el contexto de acción muestre un resultado, preséntalo de forma clara. Si no hay resultado, no inventes uno.\
+"""
 
 
 def _is_creator(session_id: str) -> bool:
@@ -59,14 +86,14 @@ _KW_MODIFY = (
 )
 
 _KW_LIST = (
-    "agenda", "recordatorio", "recordatorios", "pendiente", "pendientes",
-    "q tengo", "que tengo", "qué tengo", "tengo algo",
-    "q hay", "que hay", "qué hay",
-    "mis tareas", "mis cosas", "mis avisos",
-    "para mañana", "para hoy", "y mañana", "y hoy",
-    "mañana??", "hoy??", "mañana?", "hoy?",
-    "mostrar", "muéstrame", "muéstrame",
-    "ver agenda", "ver recordatorios",
+    "recordatorio", "recordatorios", "pendiente", "pendientes",
+    "qué tengo pendiente", "que tengo pendiente",
+    "qué tengo hoy", "que tengo hoy",
+    "qué hay hoy", "que hay hoy",
+    "qué hay mañana", "que hay mañana",
+    "qué tengo mañana", "que tengo mañana",
+    "ver agenda", "ver recordatorios", "mis recordatorios", "mi agenda",
+    "mis tareas", "mis avisos",
 )
 
 _KW_SEARCH = (
@@ -424,11 +451,21 @@ async def _run_email_agent(message: str) -> str:
 
 async def chat(message: str, session_id: str, device: str = "cli") -> str:
     is_creator = _is_creator(session_id)
-    base_system = SYSTEM_CREATOR if is_creator else SYSTEM_BASE
+    now_str = datetime.now().strftime("%A %d de %B de %Y, %H:%M")
+    template = _SYSTEM_CREATOR_TEMPLATE if is_creator else _SYSTEM_BASE_TEMPLATE
+    base_system = template.format(now=now_str)
 
     # Perfil evolutivo del usuario (siempre inyectado si existe)
     profile_text = await get_profile(session_id)
     profile_context = f"\n\n[Perfil del usuario]\n{profile_text}" if profile_text else ""
+
+    # Contexto matutino (primer uso del día)
+    morning_context = ""
+    if needs_morning_brief(session_id):
+        mark_brief_sent(session_id)
+        ctx = await build_morning_context(session_id)
+        if ctx:
+            morning_context = f"\n\n{ctx}"
 
     # Memoria Mem0 (hechos atómicos) + Knowledge Graph (relaciones entre conceptos)
     memory_context = ""
@@ -497,7 +534,7 @@ async def chat(message: str, session_id: str, device: str = "cli") -> str:
         return direct_answer
 
     # Para listar/buscar/chat: LLM redacta la respuesta
-    system = base_system + profile_context + memory_context + action_context
+    system = base_system + profile_context + morning_context + memory_context + action_context
     temp = 0.3 if action_context else 0.7
     response = await groq_client.chat.completions.create(
         model=settings.groq_model,
@@ -506,7 +543,7 @@ async def chat(message: str, session_id: str, device: str = "cli") -> str:
             {"role": "user", "content": message},
         ],
         temperature=temp,
-        max_tokens=400,
+        max_tokens=600,
     )
     answer = response.choices[0].message.content or ""
 
