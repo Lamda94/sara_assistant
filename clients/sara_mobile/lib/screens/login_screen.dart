@@ -31,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: SaraColors.bg,
+      backgroundColor: SaraColors.neutral,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -151,7 +151,7 @@ class _GooglePainter extends CustomPainter {
       3.6, 1.3, true, paint);
 
     // Centro blanco
-    paint.color = SaraColors.bg;
+    paint.color = SaraColors.neutral;
     canvas.drawCircle(Offset(cx, cy), r * 0.55, paint);
 
     // Línea horizontal del G
