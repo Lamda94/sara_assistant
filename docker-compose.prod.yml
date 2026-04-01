@@ -64,6 +64,22 @@ services:
     networks:
       - sara_net
 
+  web:
+    build:
+      context: ./clients/web
+      dockerfile: Dockerfile
+      args:
+        BACKEND_URL: http://sara_backend:8000
+    image: sara_web:latest
+    container_name: sara_web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - sara_net
+
   nginx:
     image: nginx:alpine
     container_name: sara_nginx
