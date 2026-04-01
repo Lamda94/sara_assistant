@@ -17,6 +17,10 @@ services:
     restart: unless-stopped
     networks:
       - sara_net
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   qdrant:
     image: qdrant/qdrant:v1.11.3
@@ -26,6 +30,10 @@ services:
     restart: unless-stopped
     networks:
       - sara_net
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   ollama:
     image: ollama/ollama:latest
@@ -35,6 +43,10 @@ services:
     restart: unless-stopped
     networks:
       - sara_net
+    deploy:
+      resources:
+        limits:
+          memory: 3g
 
   backend:
     build:
@@ -50,6 +62,7 @@ services:
       OLLAMA_HOST: http://ollama:11434
       FIREBASE_CREDENTIALS_PATH: /secrets/firebase-credentials.json
       GOOGLE_CREDENTIALS_PATH: /secrets/google-credentials.json
+      WHISPER_MODEL: tiny
     volumes:
       - ./secrets:/secrets:ro
       - whisper_cache:/root/.cache/huggingface
@@ -63,6 +76,10 @@ services:
     restart: unless-stopped
     networks:
       - sara_net
+    deploy:
+      resources:
+        limits:
+          memory: 4g
 
   web:
     build:
@@ -82,6 +99,10 @@ services:
     restart: unless-stopped
     networks:
       - sara_net
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   nginx:
     image: nginx:alpine
@@ -95,6 +116,10 @@ services:
     restart: unless-stopped
     networks:
       - sara_net
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
 networks:
   sara_net:

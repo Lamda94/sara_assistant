@@ -20,10 +20,12 @@ router = APIRouter(prefix="/voice", tags=["voice"])
 
 @lru_cache(maxsize=1)
 def _get_whisper():
-    """Carga el modelo Whisper una sola vez (base, CPU, int8)."""
+    """Carga el modelo Whisper una sola vez (tiny, CPU, int8)."""
+    import os
     from faster_whisper import WhisperModel
-    logger.info("Cargando modelo Whisper base …")
-    return WhisperModel("base", device="cpu", compute_type="int8")
+    model_name = os.environ.get("WHISPER_MODEL", "tiny")
+    logger.info(f"Cargando modelo Whisper {model_name} …")
+    return WhisperModel(model_name, device="cpu", compute_type="int8")
 
 
 class TTSRequest(BaseModel):
