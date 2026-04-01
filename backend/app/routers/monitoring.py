@@ -16,7 +16,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import select, func as sqlfunc
 
-from app.db.postgres import AsyncSessionLocal
+from app.db.postgres import SessionLocal as AsyncSessionLocal
 from app.models.monitoring import (
     ChildDevice, AppUsageEvent, NotificationEvent, BrowserEvent, PackageEvent
 )

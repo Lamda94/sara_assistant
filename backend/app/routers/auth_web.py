@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
-from app.db.postgres import AsyncSessionLocal
+from app.db.postgres import SessionLocal as AsyncSessionLocal
 from app.models.approved_user import ApprovedUser
 
 router = APIRouter(prefix="/auth", tags=["auth"])
