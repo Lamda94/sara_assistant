@@ -44,12 +44,12 @@ class SyncService {
 
   /// Envía el mensaje si hay conexión; si no, lo guarda en SQLite.
   /// Devuelve la respuesta del asistente o null si quedó en cola.
-  Future<String?> sendOrQueue(String localId, String content) async {
+  Future<String?> sendOrQueue(String localId, String content,
+      {String? googleAccessToken}) async {
     if (_isOnline) {
       try {
-        return await sendChat(content);
+        return await sendChat(content, googleAccessToken: googleAccessToken);
       } catch (_) {
-        // Falló con conexión activa → encolar igual
         await _enqueue(localId, content);
         return null;
       }

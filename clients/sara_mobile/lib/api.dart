@@ -50,7 +50,7 @@ class Memory {
   );
 }
 
-Future<String> sendChat(String message) async {
+Future<String> sendChat(String message, {String? googleAccessToken}) async {
   final res = await http.post(
     Uri.parse('$kBaseUrl/chat'),
     headers: {'Content-Type': 'application/json'},
@@ -58,6 +58,7 @@ Future<String> sendChat(String message) async {
       'message': message,
       'session_id': kSessionId,
       'device': kDevice,
+      'google_access_token': googleAccessToken,
     }),
   ).timeout(const Duration(seconds: 30));
 

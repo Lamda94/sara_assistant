@@ -9,6 +9,8 @@ import '../theme.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
 import '../services/sync_service.dart';
+import '../services/auth_service.dart';
+import 'login_screen.dart';
 import 'memory_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -209,7 +211,9 @@ class _ChatScreenState extends State<ChatScreen> {
     ));
 
     try {
-      final response = await SyncService().sendOrQueue(localId, text);
+      final token = await AuthService().getValidToken();
+      final response = await SyncService().sendOrQueue(localId, text,
+          googleAccessToken: token);
 
       setState(() {
         final idx = _messages.indexWhere((m) => m.id == responseId);
@@ -333,6 +337,24 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () => Navigator.push(
               context, MaterialPageRoute(builder: (_) => const MonitoringSetupScreen()),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, size: 20),
+            color: SaraColors.dim,
+            tooltip: 'Cerrar sesión',
+            onPressed: () async {
+              await AuthService().signOut();
+              if (!mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => LoginScreen(
+                  onSignedIn: () => Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const ChatScreen()),
+                    (_) => false,
+                  ),
+                )),
+                (_) => false,
+              );
+            },
           ),
         ],
         bottom: PreferredSize(

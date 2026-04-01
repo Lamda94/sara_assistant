@@ -6,10 +6,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api.dart';
 import 'theme.dart';
 import 'screens/chat_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/auth_service.dart';
 import 'services/sync_service.dart';
 import 'monitoring/monitoring_channel.dart';
 
-// Canal de notificaciones para Android
 const _channel = AndroidNotificationChannel(
   'sara_reminders',
   'Recordatorios SARA',
@@ -22,51 +23,40 @@ const _channel = AndroidNotificationChannel(
 final FlutterLocalNotificationsPlugin _localNotif =
     FlutterLocalNotificationsPlugin();
 
-// Handler para mensajes en background (debe ser top-level)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  // FCM ya muestra la notificación automáticamente en background
 }
 
 Future<void> _initNotifications() async {
   await Firebase.initializeApp();
 
-  // Configurar canal Android
   await _localNotif
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(_channel);
 
-  // Inicializar local notifications para foreground
   const initSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
   );
   await _localNotif.initialize(initSettings);
 
-  // Pedir permisos
   await FirebaseMessaging.instance.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
+    alert: true, badge: true, sound: true,
   );
 
-  // Handler background
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // Handler foreground — mostrar notificación local
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     final notification = message.notification;
     if (notification == null) return;
-
     _localNotif.show(
       notification.hashCode,
       notification.title,
       notification.body,
       NotificationDetails(
         android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
+          _channel.id, _channel.name,
           channelDescription: _channel.description,
           importance: Importance.max,
           priority: Priority.high,
@@ -76,13 +66,8 @@ Future<void> _initNotifications() async {
     );
   });
 
-  // Obtener y registrar el FCM token
   final token = await FirebaseMessaging.instance.getToken();
-  if (token != null) {
-    await registerFcmToken(token);
-  }
-
-  // Renovar token automáticamente si cambia
+  if (token != null) await registerFcmToken(token);
   FirebaseMessaging.instance.onTokenRefresh.listen(registerFcmToken);
 }
 
@@ -99,14 +84,23 @@ void main() async {
 
   await _initNotifications();
   await SyncService().init();
-  // Auto-registrar dispositivo y sincronizar estado de monitoreo con el padre
   MonitoringChannel.registerAndSync();
+
+  // Intentar login silencioso
+  await AuthService().tryAutoSignIn();
 
   runApp(const SaraApp());
 }
 
-class SaraApp extends StatelessWidget {
+class SaraApp extends StatefulWidget {
   const SaraApp({super.key});
+
+  @override
+  State<SaraApp> createState() => _SaraAppState();
+}
+
+class _SaraAppState extends State<SaraApp> {
+  bool _signedIn = AuthService().isSignedIn;
 
   @override
   Widget build(BuildContext context) {
@@ -114,7 +108,9 @@ class SaraApp extends StatelessWidget {
       title: 'SARA',
       debugShowCheckedModeBanner: false,
       theme: saraTheme(),
-      home: const ChatScreen(),
+      home: _signedIn
+          ? const ChatScreen()
+          : LoginScreen(onSignedIn: () => setState(() => _signedIn = true)),
     );
   }
 }
