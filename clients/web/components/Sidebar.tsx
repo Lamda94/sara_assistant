@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, Archive, Brain, Settings, Network } from "lucide-react";
+import { MessageSquare, Archive, Brain, Settings, Network, Shield } from "lucide-react";
 
 const NAV = [
   { href: "/",           icon: MessageSquare, label: "Conversación" },
   { href: "/memory",     icon: Brain,         label: "Memoria"      },
   { href: "/knowledge",  icon: Network,       label: "Grafo"        },
   { href: "/archives",   icon: Archive,       label: "Archivos"     },
+  { href: "/parental",   icon: Shield,        label: "Dispositivos" },
   { href: "/settings",   icon: Settings,      label: "Ajustes"      },
 ];
 

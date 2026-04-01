@@ -69,7 +69,7 @@ class MonitoringForegroundService : Service() {
                     put("package_name", stat.packageName)
                     put("app_label", appLabel)
                     put("foreground_ms", stat.totalTimeInForeground)
-                    put("launches", if (android.os.Build.VERSION.SDK_INT >= 29) stat.appLaunchCount else 0)
+                    put("launches", 0)
                     put("event_date", today)
                 }
                 appUsageList.put(item)

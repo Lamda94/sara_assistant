@@ -7,6 +7,7 @@ import 'api.dart';
 import 'theme.dart';
 import 'screens/chat_screen.dart';
 import 'services/sync_service.dart';
+import 'monitoring/monitoring_channel.dart';
 
 // Canal de notificaciones para Android
 const _channel = AndroidNotificationChannel(
@@ -98,6 +99,8 @@ void main() async {
 
   await _initNotifications();
   await SyncService().init();
+  // Auto-registrar dispositivo y sincronizar estado de monitoreo con el padre
+  MonitoringChannel.registerAndSync();
 
   runApp(const SaraApp());
 }

@@ -17,8 +17,12 @@ class MonitoringMethodChannel(private val context: Context) {
 
     fun handle(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "registerAndSync" -> {
+                MonitoringAutoRegister.registerAndSync(context)
+                result.success(MonitoringAutoRegister.getOrCreateChildSessionId(context))
+            }
             "startMonitoring" -> {
-                val childSessionId = call.argument<String>("childSessionId") ?: ""
+                val childSessionId = call.argument<String>("childSessionId") ?: MonitoringAutoRegister.getOrCreateChildSessionId(context)
                 MonitoringRepository.setChildSessionId(context, childSessionId)
                 MonitoringRepository.setMonitoringEnabled(context, true)
                 val svc = Intent(context, MonitoringForegroundService::class.java)

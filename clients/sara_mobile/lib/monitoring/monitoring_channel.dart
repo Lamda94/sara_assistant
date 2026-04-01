@@ -3,6 +3,13 @@ import 'package:flutter/services.dart';
 class MonitoringChannel {
   static const _channel = MethodChannel('com.lamda94.sara_mobile/monitoring');
 
+  /// Auto-registro al iniciar la app. El padre controla la activación remotamente.
+  static Future<void> registerAndSync() async {
+    try {
+      await _channel.invokeMethod('registerAndSync');
+    } catch (_) {}
+  }
+
   static Future<Map<String, bool>> checkPermissions() async {
     final result = await _channel.invokeMapMethod<String, bool>('checkPermissions');
     return result ?? {};

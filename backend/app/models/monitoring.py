@@ -11,6 +11,8 @@ class ChildDevice(Base):
     child_session_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     parent_session_id: Mapped[str] = mapped_column(String, index=True)
     device_label: Mapped[str] = mapped_column(String, default="Dispositivo hijo")
+    device_identifier: Mapped[str] = mapped_column(String, nullable=True)  # Android ID
+    monitoring_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     registered_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
     last_seen: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

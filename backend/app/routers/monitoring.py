@@ -32,6 +32,12 @@ class RegisterChildRequest(BaseModel):
     child_session_id: str
     parent_session_id: str
     device_label: str = "Dispositivo hijo"
+    device_identifier: Optional[str] = None
+
+
+class UpdateDeviceRequest(BaseModel):
+    device_label: Optional[str] = None
+    monitoring_enabled: Optional[bool] = None
 
 
 class AppUsageItem(BaseModel):
@@ -92,17 +98,54 @@ async def register_child(req: RegisterChildRequest):
         device = result.scalar_one_or_none()
         if device:
             device.parent_session_id = req.parent_session_id
-            device.device_label = req.device_label
             device.last_seen = datetime.utcnow()
+            if req.device_identifier:
+                device.device_identifier = req.device_identifier
         else:
             device = ChildDevice(
                 child_session_id=req.child_session_id,
                 parent_session_id=req.parent_session_id,
                 device_label=req.device_label,
+                device_identifier=req.device_identifier,
+                monitoring_enabled=False,
             )
             db.add(device)
         await db.commit()
     return {"status": "ok"}
+
+
+@router.get("/status/{child_session_id}")
+async def get_device_status(child_session_id: str):
+    """El dispositivo hijo consulta si debe monitorear."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(ChildDevice).where(ChildDevice.child_session_id == child_session_id)
+        )
+        device = result.scalar_one_or_none()
+        if not device:
+            return {"monitoring_enabled": False, "registered": False}
+        device.last_seen = datetime.utcnow()
+        await db.commit()
+    return {"monitoring_enabled": device.monitoring_enabled, "registered": True}
+
+
+@router.patch("/device/{child_session_id}")
+async def update_device(child_session_id: str, req: UpdateDeviceRequest):
+    """El padre actualiza nombre y estado de monitoreo de un dispositivo."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(ChildDevice).where(ChildDevice.child_session_id == child_session_id)
+        )
+        device = result.scalar_one_or_none()
+        if not device:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+        if req.device_label is not None:
+            device.device_label = req.device_label
+        if req.monitoring_enabled is not None:
+            device.monitoring_enabled = req.monitoring_enabled
+        await db.commit()
+    return {"status": "ok", "monitoring_enabled": device.monitoring_enabled}
 
 
 @router.post("/batch")
@@ -179,7 +222,12 @@ async def list_children(parent_session_id: str):
             select(ChildDevice).where(ChildDevice.parent_session_id == parent_session_id)
         )
         devices = result.scalars().all()
-    return [{"child_session_id": d.child_session_id, "label": d.device_label, "last_seen": d.last_seen} for d in devices]
+    return [{
+        "child_session_id": d.child_session_id,
+        "label": d.device_label,
+        "monitoring_enabled": d.monitoring_enabled,
+        "last_seen": d.last_seen,
+    } for d in devices]
 
 
 @router.get("/summary/{parent_session_id}")
