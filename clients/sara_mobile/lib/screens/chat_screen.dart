@@ -4,6 +4,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../api.dart';
+import '../monitoring/monitoring_setup_screen.dart';
 import '../theme.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
@@ -323,6 +324,14 @@ class _ChatScreenState extends State<ChatScreen> {
             color: SaraColors.secondary,
             onPressed: () => Navigator.push(
               context, MaterialPageRoute(builder: (_) => const MemoryScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.shield_outlined, size: 20),
+            color: SaraColors.dim,
+            tooltip: 'Control parental',
+            onPressed: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const MonitoringSetupScreen()),
             ),
           ),
         ],
