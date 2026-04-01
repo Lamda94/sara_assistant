@@ -1,7 +1,16 @@
 package com.lamda94.sara_mobile.monitoring
 
 import android.content.Context
-import androidx.work.*
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.Worker
+import androidx.work.WorkerParameters
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
@@ -54,12 +63,11 @@ class MonitoringSyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx,
             val baseUrl = getBaseUrl()
             post("$baseUrl/monitoring/batch", payload.toString())
 
-            // Si hay notificaciones sospechosas, alertar también por endpoint dedicado
             val notifs = payload.optJSONArray("notifications") ?: return Result.success()
             for (i in 0 until notifs.length()) {
                 val n = notifs.getJSONObject(i)
                 if (n.optBoolean("is_suspicious")) {
-                    val alert = org.json.JSONObject().apply {
+                    val alert = JSONObject().apply {
                         put("child_session_id", childId)
                         put("package_name", n.optString("package_name"))
                         put("title", n.optString("title"))
@@ -71,7 +79,6 @@ class MonitoringSyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx,
             }
             Result.success()
         } catch (e: Exception) {
-            // Restaurar los datos si falla para no perderlos
             e.printStackTrace()
             Result.retry()
         }
@@ -85,12 +92,13 @@ class MonitoringSyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx,
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         conn.outputStream.use { it.write(body.toByteArray()) }
-        conn.responseCode  // trigger request
+        conn.responseCode
         conn.disconnect()
     }
 
     private fun getBaseUrl(): String {
         val prefs = applicationContext.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        return prefs.getString("flutter.base_url", "https://api.luismendezdev.online") ?: "https://api.luismendezdev.online"
+        return prefs.getString("flutter.base_url", "https://api.luismendezdev.online")
+            ?: "https://api.luismendezdev.online"
     }
 }
