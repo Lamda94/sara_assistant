@@ -51,10 +51,10 @@ class _MonitoringSetupScreenState extends State<MonitoringSetupScreen> {
         (_perms['accessibility'] ?? false);
 
     return Scaffold(
-      backgroundColor: SaraColors.bg,
+      backgroundColor: SaraColors.neutral,
       appBar: AppBar(
         backgroundColor: SaraColors.surface,
-        title: Text('Control Parental', style: TextStyle(color: SaraColors.fg, fontSize: 15)),
+        title: Text('Control Parental', style: TextStyle(color: SaraColors.primary, fontSize: 15)),
         iconTheme: IconThemeData(color: SaraColors.secondary),
         actions: [
           IconButton(icon: const Icon(Icons.refresh, size: 18), onPressed: _refresh),
@@ -69,7 +69,7 @@ class _MonitoringSetupScreenState extends State<MonitoringSetupScreen> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: _childIdCtrl,
-                  style: TextStyle(color: SaraColors.fg, fontSize: 13),
+                  style: TextStyle(color: SaraColors.primary, fontSize: 13),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: SaraColors.surface,
@@ -161,7 +161,7 @@ class _MonitoringSetupScreenState extends State<MonitoringSetupScreen> {
           color: granted ? Colors.greenAccent : SaraColors.dim,
           size: 20,
         ),
-        title: Text(title, style: TextStyle(color: SaraColors.fg, fontSize: 13)),
+        title: Text(title, style: TextStyle(color: SaraColors.primary, fontSize: 13)),
         subtitle: Text(subtitle, style: TextStyle(color: SaraColors.dim, fontSize: 11)),
         trailing: granted
             ? null
