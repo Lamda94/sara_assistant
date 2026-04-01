@@ -74,11 +74,8 @@ services:
     container_name: sara_web
     ports:
       - "3000:3000"
+    env_file: .env.prod
     environment:
-      NEXTAUTH_URL: ${NEXTAUTH_URL}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       BACKEND_URL: http://sara_backend:8000
     depends_on:
       - backend
