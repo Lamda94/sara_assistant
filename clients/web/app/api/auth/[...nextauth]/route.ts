@@ -20,13 +20,19 @@ const handler = NextAuth({
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope: "openid email profile https://www.googleapis.com/auth/calendar",
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     }),
   ],
 
   callbacks: {
     async signIn({ user }) {
       if (isCreator(user.email!)) return true;
-      // Registrar solicitud de acceso si es un usuario nuevo
       try {
         await fetch(`${BACKEND}/auth/request`, {
           method: "POST",
@@ -34,12 +40,16 @@ const handler = NextAuth({
           body: JSON.stringify({ email: user.email, name: user.name }),
         });
       } catch {}
-      return true; // Siempre permitir login; el middleware filtra no aprobados
+      return true;
     },
 
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
+      // Guardar access_token de Google en el JWT
+      if (account) {
+        token.googleAccessToken = account.access_token;
+        token.googleRefreshToken = account.refresh_token;
+      }
       if (user) {
-        // Primera vez que se crea el token
         if (isCreator(token.email!)) {
           token.approved = true;
           token.isCreator = true;
@@ -61,6 +71,7 @@ const handler = NextAuth({
       if (session.user) {
         (session.user as any).approved = token.approved;
         (session.user as any).isCreator = token.isCreator;
+        (session.user as any).googleAccessToken = token.googleAccessToken;
       }
       return session;
     },

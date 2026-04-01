@@ -422,12 +422,12 @@ async def _run_file_agent(message: str) -> str:
         return f"Error en FileAgent: {e}"
 
 
-async def _run_calendar_agent(message: str) -> str:
+async def _run_calendar_agent(message: str, google_access_token: str | None = None) -> str:
     from app.agents.calendar_agent import CalendarAgent
     msg = message.lower()
     action = "create" if any(k in msg for k in ("añadir", "agregar", "crear evento", "nueva cita")) else "list"
     try:
-        return await CalendarAgent().run(action=action)
+        return await CalendarAgent().run(action=action, google_access_token=google_access_token)
     except Exception as e:
         return f"Error en CalendarAgent: {e}"
 
@@ -449,7 +449,7 @@ async def _run_email_agent(message: str) -> str:
 
 # ── Función principal ─────────────────────────────────────────────────────────
 
-async def chat(message: str, session_id: str, device: str = "cli") -> str:
+async def chat(message: str, session_id: str, device: str = "cli", google_access_token: str | None = None) -> str:
     is_creator = _is_creator(session_id)
     now_str = datetime.now().strftime("%A %d de %B de %Y, %H:%M")
     template = _SYSTEM_CREATOR_TEMPLATE if is_creator else _SYSTEM_BASE_TEMPLATE
@@ -517,7 +517,7 @@ async def chat(message: str, session_id: str, device: str = "cli") -> str:
         direct_answer = await _run_file_agent(message)
 
     elif intent == "calendar":
-        result = await _run_calendar_agent(message)
+        result = await _run_calendar_agent(message, google_access_token=google_access_token)
         action_context = f"\n\n[Calendario]\n{result}"
 
     elif intent == "email":

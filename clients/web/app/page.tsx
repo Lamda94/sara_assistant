@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { Search, MoreVertical, Send, Mic, Smile } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { sendChat, getTime, getDateLabel, type Message } from "@/lib/api";
@@ -46,6 +47,9 @@ function Bubble({ msg }: { msg: Message & { typing?: boolean } }) {
 }
 
 export default function ChatPage() {
+  const { data: session } = useSession();
+  const googleAccessToken = (session?.user as any)?.googleAccessToken as string | undefined;
+
   const [messages, setMessages] = useState<(Message & { typing?: boolean })[]>([
     { id: 0, role: "assistant", content: "Buenos días. Soy SARA, su asistente con memoria persistente. ¿En qué puedo asistirle hoy?", device: "system", time: getTime() },
   ]);
@@ -68,7 +72,7 @@ export default function ChatPage() {
     const thinkingId = Date.now() + 1;
     setMessages(prev => [...prev, { id: thinkingId, role: "assistant", content: "", device: "system", time: "", typing: true }]);
     try {
-      const data = await sendChat(text, SESSION_ID);
+      const data = await sendChat(text, SESSION_ID, "web", googleAccessToken);
       setMessages(prev => prev.map(m =>
         m.id === thinkingId ? { ...m, content: data.response, typing: false, device: "web", time: getTime() } : m
       ));

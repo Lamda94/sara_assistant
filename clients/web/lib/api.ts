@@ -15,11 +15,21 @@ export interface Memory {
   content: string;
 }
 
-export async function sendChat(message: string, sessionId: string, device = "web") {
+export async function sendChat(
+  message: string,
+  sessionId: string,
+  device = "web",
+  googleAccessToken?: string,
+) {
   const res = await fetch(`${BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, session_id: sessionId, device }),
+    body: JSON.stringify({
+      message,
+      session_id: sessionId,
+      device,
+      google_access_token: googleAccessToken ?? null,
+    }),
   });
   if (!res.ok) throw new Error("Error en el backend");
   return res.json() as Promise<{ response: string; session_id: string }>;

@@ -1,17 +1,8 @@
 """
-CalendarAgent — integración con Google Calendar.
-
-Configuración necesaria en .env:
-  GOOGLE_CREDENTIALS_PATH=/ruta/a/credentials.json
-
-Para obtener credentials.json:
-  1. Google Cloud Console → APIs & Services → Credentials
-  2. Crear OAuth 2.0 Client ID (Desktop app)
-  3. Descargar el JSON y ponerlo en la ruta configurada
-  4. En el primer uso, se abrirá un flujo OAuth para autorizar
+CalendarAgent — integración con Google Calendar via OAuth del usuario.
+El access_token se recibe del frontend (web/móvil) — no se almacena en servidor.
 """
 from .base import BaseAgent
-from app.config import settings
 
 
 class CalendarAgent(BaseAgent):
@@ -49,46 +40,26 @@ class CalendarAgent(BaseAgent):
         "required": ["action"],
     }
 
-    def _get_service(self):
-        """Inicializa el cliente de Google Calendar."""
+    def _get_service(self, access_token: str):
         from google.oauth2.credentials import Credentials
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
-        import os, pickle
-
-        SCOPES = ["https://www.googleapis.com/auth/calendar"]
-        token_path = settings.google_credentials_path.replace("credentials.json", "token.pickle")
-
-        creds = None
-        if os.path.exists(token_path):
-            with open(token_path, "rb") as f:
-                creds = pickle.load(f)
-
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    settings.google_credentials_path, SCOPES
-                )
-                creds = flow.run_local_server(port=0)
-            with open(token_path, "wb") as f:
-                pickle.dump(creds, f)
-
+        creds = Credentials(token=access_token)
         return build("calendar", "v3", credentials=creds)
 
-    async def run(self, action: str, days_ahead: int = 7,
-                  title: str = "", start_datetime: str = "", end_datetime: str = "", **_) -> str:
-        if not settings.google_credentials_path:
+    async def run(self, action: str, google_access_token: str | None = None,
+                  days_ahead: int = 7, title: str = "",
+                  start_datetime: str = "", end_datetime: str = "", **_) -> str:
+
+        if not google_access_token:
             return (
-                "CalendarAgent no está configurado. "
-                "Define GOOGLE_CREDENTIALS_PATH en el .env con la ruta a tu credentials.json de Google."
+                "Para acceder a Google Calendar necesito que inicies sesión con tu cuenta de Google "
+                "y autorices el acceso al calendario. Por favor cierra sesión y vuelve a entrar — "
+                "en el login se te pedirá permiso para el calendario."
             )
 
         try:
             import asyncio
-            service = await asyncio.to_thread(self._get_service)
+            service = await asyncio.to_thread(self._get_service, google_access_token)
         except Exception as e:
             return f"Error conectando con Google Calendar: {e}"
 
@@ -143,7 +114,7 @@ class CalendarAgent(BaseAgent):
                     "end":   {"dateTime": end_dt.isoformat(), "timeZone": "America/Bogota"},
                 }
 
-                created = await asyncio.to_thread(
+                await asyncio.to_thread(
                     lambda: service.events().insert(calendarId="primary", body=event).execute()
                 )
                 return f"Evento creado: '{title}' el {start.strftime('%d/%m/%Y a las %H:%M')}."
