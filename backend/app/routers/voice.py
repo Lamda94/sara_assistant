@@ -2,7 +2,7 @@
 VoiceRouter — STT y TTS para SARA.
 
 POST /voice/stt  → audio (multipart) → {"text": "..."}
-POST /voice/tts  → {"text": "...", "voice": "..."} → audio/mpeg stream
+POST /voice/tts  → {"text": "...", "voice": "...", "rate": "...", "pitch": "...", "volume": "..."} → audio/mpeg stream
 """
 import io
 import os
@@ -29,6 +29,9 @@ def _get_whisper():
 class TTSRequest(BaseModel):
     text: str
     voice: str = "es-ES-ElviraNeural"
+    rate: str = "-10%"    # velocidad: -50% (lenta) a +100% (rápida). -10% suena más natural
+    pitch: str = "-5Hz"   # tono: -50Hz (grave) a +50Hz (agudo). -5Hz da más calidez
+    volume: str = "+0%"   # volumen: -50% a +50%
 
 
 @router.post("/stt")
@@ -83,7 +86,13 @@ async def text_to_speech(req: TTSRequest):
     try:
         import edge_tts
 
-        communicate = edge_tts.Communicate(req.text, voice=req.voice)
+        communicate = edge_tts.Communicate(
+            req.text,
+            voice=req.voice,
+            rate=req.rate,
+            pitch=req.pitch,
+            volume=req.volume,
+        )
         buf = io.BytesIO()
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
