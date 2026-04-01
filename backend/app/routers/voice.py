@@ -106,3 +106,31 @@ async def text_to_speech(req: TTSRequest):
         media_type="audio/mpeg",
         headers={"Cache-Control": "no-cache"},
     )
+
+
+@router.get("/tts")
+async def text_to_speech_get(
+    text: str,
+    voice: str = "es-ES-ElviraNeural",
+    rate: str = "+0%",
+    pitch: str = "-5Hz",
+    volume: str = "+0%",
+):
+    """TTS via GET para streaming directo desde clientes móviles."""
+    import edge_tts
+
+    communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch, volume=volume)
+
+    async def audio_stream():
+        try:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    yield chunk["data"]
+        except Exception as e:
+            logger.error(f"TTS stream error: {e}")
+
+    return StreamingResponse(
+        audio_stream(),
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "no-cache"},
+    )

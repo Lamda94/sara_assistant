@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:http/http.dart' as http;
 import '../api.dart';
 import '../theme.dart';
 import '../widgets/message_bubble.dart';
@@ -124,19 +122,18 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!_voiceEnabled) return;
     await _player.stop();
     try {
-      final res = await http.post(
-        Uri.parse('$kBaseUrl/voice/tts'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'text': text, 'voice': 'es-ES-ElviraNeural'}),
-      );
-      if (res.statusCode == 200) {
-        await _player.play(BytesSource(res.bodyBytes));
-        return;
-      }
-    } catch (_) {}
-    // Fallback al TTS nativo si el backend no está disponible
-    await _tts.stop();
-    await _tts.speak(text);
+      final uri = Uri.parse('$kBaseUrl/voice/tts').replace(queryParameters: {
+        'text': text,
+        'voice': 'es-ES-ElviraNeural',
+        'rate': '+0%',
+        'pitch': '-5Hz',
+      });
+      await _player.play(UrlSource(uri.toString()));
+    } catch (_) {
+      // Fallback al TTS nativo si el backend no está disponible
+      await _tts.stop();
+      await _tts.speak(text);
+    }
   }
 
   @override
