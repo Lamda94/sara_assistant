@@ -7,11 +7,12 @@ import app.models.device_token   # noqa: F401
 import app.models.user_profile   # noqa: F401
 import app.models.knowledge      # noqa: F401
 import app.models.monitoring     # noqa: F401
+import app.models.approved_user  # noqa: F401
 from app.services.memory_service import init_collection
 from app.services.knowledge_service import init_kg_collection
 from app.services.notification_service import start_scheduler
 from app.routers import chat, memory, agents, knowledge
-from app.routers import notifications, voice, monitoring
+from app.routers import notifications, voice, monitoring, auth_web
 from app.config import settings
 
 _scheduler = None
@@ -64,6 +65,7 @@ app.include_router(knowledge.router)
 app.include_router(notifications.router)
 app.include_router(voice.router)
 app.include_router(monitoring.router)
+app.include_router(auth_web.router)
 
 
 @app.get("/health")

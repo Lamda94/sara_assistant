@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, Archive, Brain, Settings, Network, Shield } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import { MessageSquare, Archive, Brain, Settings, Network, Shield, Users, LogOut } from "lucide-react";
 
 const NAV = [
   { href: "/",           icon: MessageSquare, label: "Conversación" },
@@ -12,8 +13,21 @@ const NAV = [
   { href: "/settings",   icon: Settings,      label: "Ajustes"      },
 ];
 
-export default function Sidebar({ active }: { active?: string }) {
+const CREATOR_NAV = [
+  { href: "/admin/users", icon: Users, label: "Usuarios" },
+];
+
+export default function Sidebar() {
   const path = usePathname();
+  const { data: session } = useSession();
+  const user = session?.user as any;
+  const isCreator = user?.isCreator;
+
+  const allNav = isCreator ? [...NAV, ...CREATOR_NAV] : NAV;
+  const initials = user?.name
+    ? user.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
+    : (user?.email?.[0] ?? "?").toUpperCase();
+
   return (
     <aside style={{
       width: 220,
@@ -33,7 +47,7 @@ export default function Sidebar({ active }: { active?: string }) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
-        {NAV.map(({ href, icon: Icon, label }) => {
+        {allNav.map(({ href, icon: Icon, label }) => {
           const active = path === href;
           return (
             <Link key={href} href={href} style={{
@@ -61,7 +75,7 @@ export default function Sidebar({ active }: { active?: string }) {
 
       {/* User */}
       <div style={{
-        padding: "20px 20px",
+        padding: "16px 20px",
         borderTop: "1px solid rgba(255,255,255,0.05)",
         display: "flex",
         alignItems: "center",
@@ -71,15 +85,30 @@ export default function Sidebar({ active }: { active?: string }) {
           width: 34, height: 34, borderRadius: "50%",
           background: "#263238", border: "1px solid #455A64",
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          overflow: "hidden",
         }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#78909C" }}>L</span>
+          {user?.image
+            ? <img src={user.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <span style={{ fontSize: 12, fontWeight: 700, color: "#78909C" }}>{initials}</span>
+          }
         </div>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: "#ECEFF1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            lamda94
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: "#ECEFF1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", margin: 0 }}>
+            {user?.name ?? user?.email ?? "—"}
           </p>
-          <p style={{ fontSize: 11, color: "#455A64", marginTop: 2 }}>Creador</p>
+          <p style={{ fontSize: 11, color: "#455A64", marginTop: 2, margin: "2px 0 0" }}>
+            {isCreator ? "Creador" : "Usuario"}
+          </p>
         </div>
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          title="Cerrar sesión"
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#37474F", padding: 4, flexShrink: 0 }}
+          onMouseEnter={e => (e.currentTarget.style.color = "#78909C")}
+          onMouseLeave={e => (e.currentTarget.style.color = "#37474F")}
+        >
+          <LogOut size={14} strokeWidth={1.8} />
+        </button>
       </div>
     </aside>
   );
