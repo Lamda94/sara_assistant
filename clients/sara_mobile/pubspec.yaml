@@ -46,7 +46,7 @@ dependencies:
   speech_to_text: ^7.0.0
   flutter_tts: ^4.1.0
   audioplayers: ^6.1.0
-  workmanager: ^0.5.2
+  workmanager: ^0.9.0
 
 dev_dependencies:
   flutter_test:
