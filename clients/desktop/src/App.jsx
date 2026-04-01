@@ -184,7 +184,6 @@ export default function App() {
 
   const speak = useCallback(async (text) => {
     if (!voiceEnabled) return
-    // Cancelar audio anterior si sigue reproduciéndose
     if (currentAudioRef.current) {
       currentAudioRef.current.pause()
       currentAudioRef.current = null
@@ -196,15 +195,51 @@ export default function App() {
         body: JSON.stringify({ text }),
       })
       if (!res.ok) return
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
+
+      // MediaSource: empieza a reproducir con los primeros chunks sin esperar todo el audio
+      const mediaSource = new MediaSource()
+      const url = URL.createObjectURL(mediaSource)
       const audio = new Audio(url)
       currentAudioRef.current = audio
+
+      mediaSource.addEventListener('sourceopen', async () => {
+        let sourceBuffer
+        try {
+          sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
+        } catch {
+          // Fallback: si MediaSource no soporta audio/mpeg, descarga completa
+          URL.revokeObjectURL(url)
+          const blob = await res.blob()
+          const fallbackUrl = URL.createObjectURL(blob)
+          const fallbackAudio = new Audio(fallbackUrl)
+          currentAudioRef.current = fallbackAudio
+          fallbackAudio.onended = () => URL.revokeObjectURL(fallbackUrl)
+          fallbackAudio.play()
+          return
+        }
+
+        const reader = res.body.getReader()
+        const pump = async () => {
+          const { done, value } = await reader.read()
+          if (done) {
+            if (!sourceBuffer.updating) mediaSource.endOfStream()
+            else sourceBuffer.addEventListener('updateend', () => mediaSource.endOfStream(), { once: true })
+            return
+          }
+          if (sourceBuffer.updating) {
+            await new Promise(r => sourceBuffer.addEventListener('updateend', r, { once: true }))
+          }
+          sourceBuffer.appendBuffer(value)
+          sourceBuffer.addEventListener('updateend', pump, { once: true })
+        }
+        pump()
+      }, { once: true })
+
       audio.onended = () => {
         URL.revokeObjectURL(url)
         currentAudioRef.current = null
       }
-      audio.play()
+      audio.play().catch(() => {})
     } catch (err) {
       console.error('TTS error:', err)
     }

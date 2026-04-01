@@ -82,24 +82,27 @@ async def speech_to_text(audio: UploadFile = File(...)):
 
 @router.post("/tts")
 async def text_to_speech(req: TTSRequest):
-    """Convierte texto a audio MP3 via edge-tts."""
-    try:
-        import edge_tts
+    """Convierte texto a audio MP3 via edge-tts (streaming directo)."""
+    import edge_tts
 
-        communicate = edge_tts.Communicate(
-            req.text,
-            voice=req.voice,
-            rate=req.rate,
-            pitch=req.pitch,
-            volume=req.volume,
-        )
-        buf = io.BytesIO()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="audio/mpeg")
-    except Exception as e:
-        logger.error(f"TTS error: {e}")
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=str(e))
+    communicate = edge_tts.Communicate(
+        req.text,
+        voice=req.voice,
+        rate=req.rate,
+        pitch=req.pitch,
+        volume=req.volume,
+    )
+
+    async def audio_stream():
+        try:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    yield chunk["data"]
+        except Exception as e:
+            logger.error(f"TTS stream error: {e}")
+
+    return StreamingResponse(
+        audio_stream(),
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "no-cache"},
+    )
