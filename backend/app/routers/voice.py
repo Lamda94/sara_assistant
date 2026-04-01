@@ -28,7 +28,7 @@ def _get_whisper():
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "es-CO-SalomeNeural"
+    voice: str = "es-ES-ElviraNeural"
 
 
 @router.post("/stt")

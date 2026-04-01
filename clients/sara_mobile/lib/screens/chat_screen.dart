@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:http/http.dart' as http;
 import '../api.dart';
 import '../theme.dart';
 import '../widgets/message_bubble.dart';
@@ -21,6 +24,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scroll = ScrollController();
   final SpeechToText _stt = SpeechToText();
   final FlutterTts _tts = FlutterTts();
+  final AudioPlayer _player = AudioPlayer();
   int _pendingCount = 0;
   bool _sessionActive = false;
   bool _isOnline = true;
@@ -118,6 +122,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _speak(String text) async {
     if (!_voiceEnabled) return;
+    await _player.stop();
+    try {
+      final res = await http.post(
+        Uri.parse('$kBaseUrl/voice/tts'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'text': text, 'voice': 'es-ES-ElviraNeural'}),
+      );
+      if (res.statusCode == 200) {
+        await _player.play(BytesSource(res.bodyBytes));
+        return;
+      }
+    } catch (_) {}
+    // Fallback al TTS nativo si el backend no está disponible
     await _tts.stop();
     await _tts.speak(text);
   }
@@ -128,6 +145,7 @@ class _ChatScreenState extends State<ChatScreen> {
     SyncService().onMessageSynced = null;
     _stt.stop();
     _tts.stop();
+    _player.dispose();
     _ctrl.dispose();
     _scroll.dispose();
     super.dispose();
@@ -300,7 +318,7 @@ class _ChatScreenState extends State<ChatScreen> {
             tooltip: _voiceEnabled ? 'Silenciar voz' : 'Activar voz',
             onPressed: () {
               setState(() => _voiceEnabled = !_voiceEnabled);
-              if (!_voiceEnabled) _tts.stop();
+              if (!_voiceEnabled) { _player.stop(); _tts.stop(); }
             },
           ),
           IconButton(
