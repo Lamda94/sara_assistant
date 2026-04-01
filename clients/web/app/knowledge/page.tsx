@@ -123,7 +123,7 @@ export default function KnowledgePage() {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#13151A", color: "#ECEFF1" }}>
-      <Sidebar active="knowledge" />
+      <Sidebar />
       <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
 
         {/* Header */}
