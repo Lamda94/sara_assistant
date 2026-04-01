@@ -4,6 +4,17 @@ import GoogleProvider from "next-auth/providers/google";
 const CREATOR_EMAIL = "lamda94@gmail.com";
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 
+// Gmail ignora los puntos en el nombre de usuario
+function normalizeEmail(email: string): string {
+  const [local, domain] = email.toLowerCase().split("@");
+  if (domain === "gmail.com") return local.replace(/\./g, "") + "@" + domain;
+  return email.toLowerCase();
+}
+
+function isCreator(email: string): boolean {
+  return normalizeEmail(email) === normalizeEmail(CREATOR_EMAIL);
+}
+
 const handler = NextAuth({
   providers: [
     GoogleProvider({
@@ -14,7 +25,7 @@ const handler = NextAuth({
 
   callbacks: {
     async signIn({ user }) {
-      if (user.email === CREATOR_EMAIL) return true;
+      if (isCreator(user.email!)) return true;
       // Registrar solicitud de acceso si es un usuario nuevo
       try {
         await fetch(`${BACKEND}/auth/request`, {
@@ -29,7 +40,7 @@ const handler = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         // Primera vez que se crea el token
-        if (token.email === CREATOR_EMAIL) {
+        if (isCreator(token.email!)) {
           token.approved = true;
           token.isCreator = true;
         } else {

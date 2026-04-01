@@ -20,6 +20,18 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 CREATOR_EMAIL = "lamda94@gmail.com"
 
 
+def normalize_email(email: str) -> str:
+    email = email.lower().strip()
+    local, _, domain = email.partition("@")
+    if domain == "gmail.com":
+        local = local.replace(".", "")
+    return f"{local}@{domain}"
+
+
+def is_creator(email: str) -> bool:
+    return normalize_email(email) == normalize_email(CREATOR_EMAIL)
+
+
 class RequestAccessBody(BaseModel):
     email: str
     name: Optional[str] = None
@@ -31,7 +43,7 @@ class ApproveBody(BaseModel):
 
 @router.get("/check")
 async def check_approval(email: str = Query(...)):
-    if email == CREATOR_EMAIL:
+    if is_creator(email):
         return {"approved": True, "is_creator": True}
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(ApprovedUser).where(ApprovedUser.email == email))
@@ -43,7 +55,7 @@ async def check_approval(email: str = Query(...)):
 
 @router.post("/request")
 async def request_access(body: RequestAccessBody):
-    if body.email == CREATOR_EMAIL:
+    if is_creator(body.email):
         return {"status": "creator"}
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(ApprovedUser).where(ApprovedUser.email == body.email))
