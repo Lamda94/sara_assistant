@@ -74,7 +74,6 @@ export default function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
-  const synthRef = useRef(window.speechSynthesis)
   const sendMessageRef = useRef(null)
 
   useEffect(() => {
@@ -103,7 +102,7 @@ export default function App() {
     }
 
     // — INICIAR —
-    synthRef.current?.cancel()
+    if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
@@ -181,19 +180,34 @@ export default function App() {
     }
   }, [isListening])
 
-  const speak = useCallback((text) => {
-    if (!voiceEnabled || !synthRef.current) return
-    synthRef.current.cancel()
-    const utt = new SpeechSynthesisUtterance(text)
-    utt.lang = 'es-ES'
-    utt.rate = 1.05
-    utt.pitch = 1.0
-    // Preferir voz femenina en español si está disponible
-    const voices = synthRef.current.getVoices()
-    const esVoice = voices.find(v => v.lang.startsWith('es') && v.name.toLowerCase().includes('female'))
-      || voices.find(v => v.lang.startsWith('es'))
-    if (esVoice) utt.voice = esVoice
-    synthRef.current.speak(utt)
+  const currentAudioRef = useRef(null)
+
+  const speak = useCallback(async (text) => {
+    if (!voiceEnabled) return
+    // Cancelar audio anterior si sigue reproduciéndose
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current = null
+    }
+    try {
+      const res = await fetch(`${BACKEND}/voice/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      currentAudioRef.current = audio
+      audio.onended = () => {
+        URL.revokeObjectURL(url)
+        currentAudioRef.current = null
+      }
+      audio.play()
+    } catch (err) {
+      console.error('TTS error:', err)
+    }
   }, [voiceEnabled])
 
   const sendMessage = async (overrideText) => {
@@ -269,7 +283,7 @@ export default function App() {
               <button
                 className={`icon-btn${voiceEnabled ? ' active' : ''}`}
                 title={voiceEnabled ? 'Voz activa (click para silenciar)' : 'Voz silenciada'}
-                onClick={() => { setVoiceEnabled(v => !v); synthRef.current?.cancel() }}
+                onClick={() => { setVoiceEnabled(v => !v); if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null } }}
               >
                 {voiceEnabled ? <Mic size={13} strokeWidth={1.8} /> : <MicOff size={13} strokeWidth={1.8} />}
               </button>

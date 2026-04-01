@@ -106,9 +106,10 @@ class _ChatScreenState extends State<ChatScreen> {
         listenFor: const Duration(seconds: 20),
         pauseFor: const Duration(seconds: 3),
         onResult: (result) {
-          if (result.finalResult) {
+          if (result.finalResult && result.recognizedWords.isNotEmpty) {
             _ctrl.text = result.recognizedWords;
             setState(() => _isListening = false);
+            _send();
           }
         },
       );
