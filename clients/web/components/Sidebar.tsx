@@ -2,11 +2,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { MessageSquare, Archive, Brain, Settings, Network, Shield, Users, LogOut } from "lucide-react";
+import { MessageSquare, Archive, Brain, Settings, Network, Shield, Users, LogOut, ClipboardCheck } from "lucide-react";
 
 const NAV = [
   { href: "/",           icon: MessageSquare, label: "Conversación" },
   { href: "/memory",     icon: Brain,         label: "Memoria"      },
+  { href: "/commitments", icon: ClipboardCheck, label: "Compromisos" },
   { href: "/knowledge",  icon: Network,       label: "Grafo"        },
   { href: "/archives",   icon: Archive,       label: "Archivos"     },
   { href: "/parental",   icon: Shield,        label: "Dispositivos" },

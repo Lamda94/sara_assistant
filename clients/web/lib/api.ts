@@ -57,6 +57,36 @@ export async function searchMemories(q: string): Promise<{ query: string; result
   return { query: q, results };
 }
 
+/* ── Insights / Compromisos ─────────────────────────────────── */
+
+export interface Insight {
+  id: string;
+  session_id?: string;
+  type: string;
+  content: string;
+  due_date: string | null;
+  notified: boolean;
+  created_at: string | null;
+}
+
+export async function getInsights(sessionId: string): Promise<Insight[]> {
+  const res = await fetch(`${BASE}/notifications/insights/${sessionId}`);
+  if (!res.ok) throw new Error("Error obteniendo insights");
+  return res.json();
+}
+
+export async function getAllInsights(): Promise<Insight[]> {
+  const res = await fetch(`${BASE}/notifications/insights/all`);
+  if (!res.ok) throw new Error("Error obteniendo todos los insights");
+  return res.json();
+}
+
+export async function dismissInsight(insightId: string): Promise<void> {
+  await fetch(`${BASE}/notifications/dismiss/${insightId}`, { method: "POST" });
+}
+
+/* ── Utilidades ────────────────────────────────────────────── */
+
 export function getTime() {
   return new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 }
