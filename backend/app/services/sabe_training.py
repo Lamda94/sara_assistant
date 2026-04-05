@@ -360,13 +360,14 @@ async def _analyze_and_bet(event: dict) -> bool:
 
         stake_units = round(br.current_balance * stake_pct, 2)
 
-        # Parsear fecha del evento
+        # Parsear fecha del evento (naive, sin timezone para PostgreSQL)
         event_date = datetime.utcnow()
         if event.get("commence_time"):
             try:
-                event_date = datetime.fromisoformat(
+                dt = datetime.fromisoformat(
                     event["commence_time"].replace("Z", "+00:00")
                 )
+                event_date = dt.replace(tzinfo=None)
             except Exception:
                 pass
 
