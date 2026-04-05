@@ -193,13 +193,23 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # SABE — Resolver resultados de apuestas simuladas (cada 3h)
+    # SABE — Resolver resultados de apuestas simuladas (cada 2h)
     from app.services.betting_service import resolve_pending_bets
     scheduler.add_job(
         resolve_pending_bets,
         trigger="interval",
-        hours=3,
+        hours=2,
         id="sabe_resolver",
+        replace_existing=True,
+    )
+
+    # SABE — Training loop (cada 3h, después del resolver)
+    from app.services.sabe_training import sabe_training_loop
+    scheduler.add_job(
+        sabe_training_loop,
+        trigger="interval",
+        hours=3,
+        id="sabe_training",
         replace_existing=True,
     )
 
@@ -215,6 +225,6 @@ def start_scheduler():
     scheduler.start()
     logger.info(
         f"Scheduler iniciado: recordatorios (30s) + proactividad ({cfg.proactive_check_interval_hours}h) "
-        f"+ consolidación (3am) + SABE resolver (3h) + SABE briefing (8am)"
+        f"+ consolidación (3am) + SABE resolver (2h) + SABE training (3h) + SABE briefing (8am)"
     )
     return scheduler
