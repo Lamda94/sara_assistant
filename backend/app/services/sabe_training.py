@@ -300,13 +300,16 @@ async def _analyze_and_bet(event: dict) -> bool:
             {
                 "role": "system",
                 "content": (
-                    "Eres SABE en modo entrenamiento. Analiza el evento y decide si apostar.\n"
-                    "Responde en JSON:\n"
-                    '{"bet": true/false, "market": "h2h/over_under/spreads", '
-                    '"selection": "Team Name o Over/Under X.X", '
+                    "Eres SABE en modo ENTRENAMIENTO. Estás aprendiendo, así que DEBES apostar "
+                    "en la mayoría de eventos para generar datos de aprendizaje.\n"
+                    "Analiza las cuotas y los datos disponibles. Elige el resultado más probable.\n"
+                    "Responde SOLO en JSON:\n"
+                    '{"bet": true, "market": "h2h", '
+                    '"selection": "nombre exacto del equipo/resultado de las cuotas", '
                     '"predicted_prob": 0.XX, "confidence": NN, '
                     '"analysis": "resumen breve del análisis"}\n'
-                    "Solo apuesta si detectas edge > 5%. Sé riguroso y analítico."
+                    "IMPORTANTE: selection debe coincidir EXACTAMENTE con uno de los nombres "
+                    "de las cuotas proporcionadas. Apuesta siempre que tengas una opinión."
                 ),
             },
             {"role": "user", "content": context},
@@ -338,7 +341,7 @@ async def _analyze_and_bet(event: dict) -> bool:
     implied_prob = 1 / odds if odds > 1 else 0.5
     edge = predicted_prob - implied_prob
 
-    if edge < 0.05:
+    if edge < 0.02:  # Threshold bajo en entrenamiento para generar más datos
         return False
 
     # Kelly criterion
