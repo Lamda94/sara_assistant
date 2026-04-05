@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     proactive_inactivity_hours: int = 48  # Alertar si no hay interacción en 48h
     proactive_max_daily_pushes: int = 3   # Máximo pushes proactivos por día por usuario
 
+    # --- Security (Phase 5.5) ---
+    creator_email: str = "lamda94@gmail.com"
+    creator_id: str = "lamda94"
+    sara_api_key: str = ""          # vacío = sin verificación (dev)
+    allowed_origins: str = ""       # comma-separated; vacío = "*" (dev)
+
     # --- Consolidation (Phase 4.2) ---
     consolidation_similarity_threshold: float = 0.88
     consolidation_max_points_per_user: int = 500

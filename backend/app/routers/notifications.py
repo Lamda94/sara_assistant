@@ -1,22 +1,24 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from app.db.postgres import SessionLocal
 from app.models.device_token import DeviceToken
 from app.models.proactive_insight import ProactiveInsight
+from app.dependencies import validate_session_id, require_creator
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 class TokenRequest(BaseModel):
-    session_id: str
-    token: str
+    session_id: str = Field(..., max_length=100)
+    token: str = Field(..., max_length=500)
 
 
 @router.post("/register-token")
 async def register_token(req: TokenRequest):
     """Registra o actualiza el FCM token de un dispositivo."""
+    validate_session_id(req.session_id)
     async with SessionLocal() as s:
         stmt = insert(DeviceToken).values(
             session_id=req.session_id,
@@ -31,8 +33,9 @@ async def register_token(req: TokenRequest):
 
 
 @router.get("/insights/all")
-async def get_all_insights():
-    """Lista TODOS los insights no descartados de todos los usuarios (para creador)."""
+async def get_all_insights(session_id: str = Query(..., max_length=100)):
+    """Lista TODOS los insights no descartados (creator only)."""
+    require_creator(session_id)
     async with SessionLocal() as s:
         r = await s.execute(
             select(ProactiveInsight)
@@ -59,6 +62,7 @@ async def get_all_insights():
 @router.get("/insights/{session_id}")
 async def get_insights(session_id: str):
     """Lista insights proactivos pendientes (no descartados) para una sesión."""
+    validate_session_id(session_id)
     async with SessionLocal() as s:
         r = await s.execute(
             select(ProactiveInsight)

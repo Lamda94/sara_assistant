@@ -13,7 +13,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select, func as sqlfunc
 
 from app.db.postgres import SessionLocal as AsyncSessionLocal
@@ -29,59 +29,59 @@ router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 # ──────────────────────────────────────────────
 
 class RegisterChildRequest(BaseModel):
-    child_session_id: str
-    parent_session_id: str
-    device_label: str = "Dispositivo hijo"
-    device_identifier: Optional[str] = None
+    child_session_id: str = Field(..., max_length=100)
+    parent_session_id: str = Field(..., max_length=100)
+    device_label: str = Field("Dispositivo hijo", max_length=100)
+    device_identifier: Optional[str] = Field(None, max_length=200)
 
 
 class UpdateDeviceRequest(BaseModel):
-    device_label: Optional[str] = None
+    device_label: Optional[str] = Field(None, max_length=100)
     monitoring_enabled: Optional[bool] = None
 
 
 class AppUsageItem(BaseModel):
-    package_name: str
-    app_label: str
+    package_name: str = Field(..., max_length=200)
+    app_label: str = Field(..., max_length=200)
     foreground_ms: int
     launches: int
-    event_date: str  # "YYYY-MM-DD"
+    event_date: str = Field(..., max_length=10)  # "YYYY-MM-DD"
 
 
 class NotificationItem(BaseModel):
-    package_name: str
-    title: Optional[str] = None
-    body: Optional[str] = None
+    package_name: str = Field(..., max_length=200)
+    title: Optional[str] = Field(None, max_length=500)
+    body: Optional[str] = Field(None, max_length=2000)
     is_suspicious: bool = False
     posted_at: int  # epoch ms
 
 
 class BrowserItem(BaseModel):
-    browser_package: str
-    url: str
+    browser_package: str = Field(..., max_length=200)
+    url: str = Field(..., max_length=2000)
     visited_at: int  # epoch ms
 
 
 class PackageItem(BaseModel):
-    package_name: str
-    app_label: Optional[str] = None
-    event_type: str  # "install" | "uninstall"
+    package_name: str = Field(..., max_length=200)
+    app_label: Optional[str] = Field(None, max_length=200)
+    event_type: str = Field(..., max_length=20)  # "install" | "uninstall"
     occurred_at: int  # epoch ms
 
 
 class BatchRequest(BaseModel):
-    child_session_id: str
-    app_usage: list[AppUsageItem] = []
-    notifications: list[NotificationItem] = []
-    browser: list[BrowserItem] = []
-    packages: list[PackageItem] = []
+    child_session_id: str = Field(..., max_length=100)
+    app_usage: list[AppUsageItem] = Field(default=[], max_length=200)
+    notifications: list[NotificationItem] = Field(default=[], max_length=200)
+    browser: list[BrowserItem] = Field(default=[], max_length=200)
+    packages: list[PackageItem] = Field(default=[], max_length=50)
 
 
 class SuspiciousRequest(BaseModel):
-    child_session_id: str
-    package_name: str
-    title: Optional[str] = None
-    body: Optional[str] = None
+    child_session_id: str = Field(..., max_length=100)
+    package_name: str = Field(..., max_length=200)
+    title: Optional[str] = Field(None, max_length=500)
+    body: Optional[str] = Field(None, max_length=2000)
     posted_at: int  # epoch ms
 
 

@@ -13,7 +13,6 @@ from app.services.proactivity_service import (
 
 groq_client = AsyncGroq(api_key=settings.groq_api_key)
 
-CREATOR_ID = "lamda94"
 
 _SYSTEM_BASE_TEMPLATE = """\
 Eres SARA, una asistente virtual inteligente, autónoma y con memoria persistente.
@@ -56,7 +55,7 @@ Comportamiento:
 
 
 def _is_creator(session_id: str) -> bool:
-    return CREATOR_ID in session_id.lower()
+    return settings.creator_id in session_id.lower()
 
 
 # ── Detección de intención: solo recordatorios (fast-path) ───────────────────

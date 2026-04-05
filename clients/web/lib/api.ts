@@ -76,7 +76,7 @@ export async function getInsights(sessionId: string): Promise<Insight[]> {
 }
 
 export async function getAllInsights(): Promise<Insight[]> {
-  const res = await fetch(`${BASE}/notifications/insights/all`);
+  const res = await fetch(`${BASE}/notifications/insights/all?session_id=${SESSION_ID}`);
   if (!res.ok) throw new Error("Error obteniendo todos los insights");
   return res.json();
 }

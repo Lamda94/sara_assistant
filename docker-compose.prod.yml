@@ -96,6 +96,7 @@ services:
     env_file: .env.prod
     environment:
       BACKEND_URL: http://sara_backend:8000
+      SARA_API_KEY: ${SARA_API_KEY}
     depends_on:
       - backend
     restart: unless-stopped

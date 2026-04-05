@@ -30,12 +30,14 @@ export default function AdminUsersPage() {
     }
   }, [status, user, router]);
 
+  const requesterEmail = user?.email ? encodeURIComponent(user.email) : "";
+
   const load = async () => {
     setLoading(true);
     try {
       const [pRes, aRes] = await Promise.all([
-        fetch(`${BACKEND}/auth/pending`),
-        fetch(`${BACKEND}/auth/approved`),
+        fetch(`${BACKEND}/auth/pending?requester=${requesterEmail}`),
+        fetch(`${BACKEND}/auth/approved?requester=${requesterEmail}`),
       ]);
       setPending(await pRes.json());
       setApproved(await aRes.json());
@@ -47,7 +49,7 @@ export default function AdminUsersPage() {
   useEffect(() => { load(); }, []);
 
   const approve = async (email: string) => {
-    await fetch(`${BACKEND}/auth/approve`, {
+    await fetch(`${BACKEND}/auth/approve?requester=${requesterEmail}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
@@ -56,7 +58,7 @@ export default function AdminUsersPage() {
   };
 
   const revoke = async (email: string) => {
-    await fetch(`${BACKEND}/auth/revoke?email=${encodeURIComponent(email)}`, { method: "DELETE" });
+    await fetch(`${BACKEND}/auth/revoke?email=${encodeURIComponent(email)}&requester=${requesterEmail}`, { method: "DELETE" });
     await load();
   };
 

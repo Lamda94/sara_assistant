@@ -9,15 +9,15 @@ DELETE /auth/revoke          → revoca acceso
 """
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from app.db.postgres import SessionLocal as AsyncSessionLocal
 from app.models.approved_user import ApprovedUser
+from app.config import settings
+from app.limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-CREATOR_EMAIL = "lamda94@gmail.com"
 
 
 def normalize_email(email: str) -> str:
@@ -29,20 +29,20 @@ def normalize_email(email: str) -> str:
 
 
 def is_creator(email: str) -> bool:
-    return normalize_email(email) == normalize_email(CREATOR_EMAIL)
+    return normalize_email(email) == normalize_email(settings.creator_email)
 
 
 class RequestAccessBody(BaseModel):
-    email: str
-    name: Optional[str] = None
+    email: str = Field(..., max_length=254)
+    name: Optional[str] = Field(None, max_length=100)
 
 
 class ApproveBody(BaseModel):
-    email: str
+    email: str = Field(..., max_length=254)
 
 
 @router.get("/check")
-async def check_approval(email: str = Query(...)):
+async def check_approval(email: str = Query(..., max_length=254)):
     if is_creator(email):
         return {"approved": True, "is_creator": True}
     async with AsyncSessionLocal() as db:
@@ -54,7 +54,8 @@ async def check_approval(email: str = Query(...)):
 
 
 @router.post("/request")
-async def request_access(body: RequestAccessBody):
+@limiter.limit("5/minute")
+async def request_access(request: Request, body: RequestAccessBody):
     if is_creator(body.email):
         return {"status": "creator"}
     async with AsyncSessionLocal() as db:
@@ -68,7 +69,9 @@ async def request_access(body: RequestAccessBody):
 
 
 @router.get("/pending")
-async def list_pending():
+async def list_pending(requester: str = Query(..., max_length=254)):
+    if not is_creator(requester):
+        raise HTTPException(status_code=403, detail="Acceso restringido")
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(ApprovedUser).where(ApprovedUser.approved == False).order_by(ApprovedUser.requested_at.desc())
@@ -78,7 +81,9 @@ async def list_pending():
 
 
 @router.get("/approved")
-async def list_approved():
+async def list_approved(requester: str = Query(..., max_length=254)):
+    if not is_creator(requester):
+        raise HTTPException(status_code=403, detail="Acceso restringido")
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(ApprovedUser).where(ApprovedUser.approved == True).order_by(ApprovedUser.approved_at.desc())
@@ -88,7 +93,9 @@ async def list_approved():
 
 
 @router.post("/approve")
-async def approve_user(body: ApproveBody):
+async def approve_user(body: ApproveBody, requester: str = Query(..., max_length=254)):
+    if not is_creator(requester):
+        raise HTTPException(status_code=403, detail="Acceso restringido")
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(ApprovedUser).where(ApprovedUser.email == body.email))
         user = result.scalar_one_or_none()
@@ -101,7 +108,12 @@ async def approve_user(body: ApproveBody):
 
 
 @router.delete("/revoke")
-async def revoke_user(email: str = Query(...)):
+async def revoke_user(
+    email: str = Query(..., max_length=254),
+    requester: str = Query(..., max_length=254),
+):
+    if not is_creator(requester):
+        raise HTTPException(status_code=403, detail="Acceso restringido")
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(ApprovedUser).where(ApprovedUser.email == email))
         user = result.scalar_one_or_none()

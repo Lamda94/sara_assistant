@@ -1,20 +1,21 @@
 import time
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from app.services.memory_service import consolidate_memories, update_importance_scores
 from app.services.profile_service import get_profile, generate_and_save_profile
+from app.dependencies import validate_session_id
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
 class ProfileRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(..., max_length=100)
 
 
 class ConsolidateRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(..., max_length=100)
 
 
 @router.post("/consolidate")
@@ -32,6 +33,7 @@ async def consolidate(req: ConsolidateRequest):
     )
     from app.services.mem0_service import mem0_add
 
+    validate_session_id(req.session_id)
     session_id = req.session_id
     t0 = time.time()
     log = ConsolidationLog(session_id=session_id, run_type="manual")
@@ -129,6 +131,7 @@ async def consolidation_history(
 @router.get("/profile/{session_id}")
 async def view_profile(session_id: str):
     """Muestra el perfil evolutivo actual de un usuario."""
+    validate_session_id(session_id)
     from sqlalchemy import select
     from app.db.postgres import SessionLocal
     from app.models.user_profile import UserProfile
@@ -151,6 +154,7 @@ async def view_profile(session_id: str):
 @router.post("/profile/refresh")
 async def refresh_profile(req: ProfileRequest):
     """Fuerza la regeneración inmediata del perfil del usuario."""
+    validate_session_id(req.session_id)
     await generate_and_save_profile(req.session_id)
     profile = await get_profile(req.session_id)
     return {"ok": True, "profile": profile}

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 const String kBaseUrl = 'https://api.luismendezdev.online';
 const String kSessionId = 'lamda94-mobile';
 const String kDevice = 'mobile';
+const String kApiKey = String.fromEnvironment('SARA_API_KEY', defaultValue: '');
 
 class ChatMessage {
   final String id;
@@ -53,7 +54,7 @@ class Memory {
 Future<String> sendChat(String message, {String? googleAccessToken}) async {
   final res = await http.post(
     Uri.parse('$kBaseUrl/chat'),
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-API-Key': kApiKey},
     body: jsonEncode({
       'message': message,
       'session_id': kSessionId,
@@ -69,8 +70,10 @@ Future<String> sendChat(String message, {String? googleAccessToken}) async {
 }
 
 Future<List<Memory>> getMemories() async {
-  final res = await http.get(Uri.parse('$kBaseUrl/memory/$kSessionId'))
-      .timeout(const Duration(seconds: 15));
+  final res = await http.get(
+    Uri.parse('$kBaseUrl/memory/$kSessionId'),
+    headers: {'X-API-Key': kApiKey},
+  ).timeout(const Duration(seconds: 15));
   if (res.statusCode == 200) {
     final data = jsonDecode(res.body);
     return (data['facts'] as List).map((m) => Memory.fromJson(m)).toList();
@@ -82,7 +85,7 @@ Future<void> registerFcmToken(String token) async {
   try {
     await http.post(
       Uri.parse('$kBaseUrl/notifications/register-token'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-API-Key': kApiKey},
       body: jsonEncode({'session_id': kSessionId, 'token': token}),
     ).timeout(const Duration(seconds: 10));
   } catch (_) {

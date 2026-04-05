@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 from contextlib import asynccontextmanager
 from app.db.postgres import init_db
 import app.models.reminder       # noqa: F401
@@ -17,6 +19,9 @@ from app.services.notification_service import start_scheduler
 from app.routers import chat, memory, agents, knowledge
 from app.routers import notifications, voice, monitoring, auth_web
 from app.config import settings
+from app.limiter import limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 _scheduler = None
 
@@ -54,13 +59,55 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── Rate Limiter ──────────────────────────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+_origins = (
+    [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+    if settings.allowed_origins
+    else ["*"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE", "PATCH"],
+    allow_headers=["Content-Type", "X-API-Key"],
+    max_age=3600,
 )
 
+
+# ── Security Headers ─────────────────────────────────────────────────────────
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+
+# ── API Key Verification ─────────────────────────────────────────────────────
+_OPEN_PATHS = {"/health", "/docs", "/openapi.json"}
+
+
+@app.middleware("http")
+async def verify_api_key(request: Request, call_next):
+    # Sin API key configurada = modo dev, todo pasa
+    if not settings.sara_api_key:
+        return await call_next(request)
+    # Permitir preflight CORS y rutas públicas
+    if request.method == "OPTIONS" or request.url.path in _OPEN_PATHS:
+        return await call_next(request)
+    key = request.headers.get("X-API-Key", "")
+    if key != settings.sara_api_key:
+        return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+    return await call_next(request)
+
+
+# ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(chat.router)
 app.include_router(memory.router)
 app.include_router(agents.router)
