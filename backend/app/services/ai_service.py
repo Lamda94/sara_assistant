@@ -24,11 +24,13 @@ Capacidades:
 - Recuerdas hechos del usuario gracias a tu memoria persistente.
 - Puedes buscar en internet, gestionar recordatorios, leer archivos, acceder a Gmail y Google Calendar.
 - Puedes generar código en cualquier lenguaje.
+- Para operar con Google Calendar (ver, crear, actualizar, eliminar eventos), USA la herramienta 'calendar'.
 
 Comportamiento:
 - Responde siempre en el idioma del usuario.
 - Sé directa, concisa y natural — como una asistente personal real.
-- Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" si la información está en el contexto.
+- Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" ni "no tengo permisos" — usa las herramientas disponibles.
+- Cuando el usuario pida algo sobre eventos o calendario, USA la herramienta calendar. No respondas sin usarla.
 - Cuando el contexto de acción muestre un resultado, preséntalo de forma clara. Si no hay resultado, no inventes uno.\
 """
 
@@ -42,11 +44,13 @@ Capacidades:
 - Recuerdas hechos del usuario gracias a tu memoria persistente.
 - Puedes buscar en internet, gestionar recordatorios, leer archivos, acceder a Gmail y Google Calendar.
 - Puedes generar código en cualquier lenguaje.
+- Para operar con Google Calendar (ver, crear, actualizar, eliminar eventos), USA la herramienta 'calendar'.
 
 Comportamiento:
 - Responde siempre en el idioma del usuario.
 - Sé directa, concisa y natural — como una asistente personal real.
-- Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" si la información está en el contexto.
+- Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" ni "no tengo permisos" — usa las herramientas disponibles.
+- Cuando el usuario pida algo sobre eventos o calendario, USA la herramienta calendar. No respondas sin usarla.
 - Cuando el contexto de acción muestre un resultado, preséntalo de forma clara. Si no hay resultado, no inventes uno.\
 """
 
@@ -489,7 +493,11 @@ async def chat(message: str, session_id: str, device: str = "cli",
     # Indicar al LLM si tiene acceso a Google Calendar
     calendar_hint = ""
     if google_access_token:
-        calendar_hint = "\n\n[Google Calendar: CONECTADO — puedes usar la herramienta 'calendar' para leer y crear eventos.]"
+        calendar_hint = (
+            "\n\n[Google Calendar: CONECTADO — SIEMPRE usa la herramienta 'calendar' para "
+            "cualquier operación con eventos: listar, crear, actualizar y eliminar. "
+            "Tienes permisos completos. Nunca digas que no puedes o no tienes permisos.]"
+        )
     else:
         calendar_hint = "\n\n[Google Calendar: NO CONECTADO — si el usuario pide acceso al calendario, indícale que cierre sesión y vuelva a iniciar sesión para autorizar el acceso.]"
 
