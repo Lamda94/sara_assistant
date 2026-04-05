@@ -105,9 +105,20 @@ _KW_LIST = (
 )
 
 
+_KW_CALENDAR_BYPASS = (
+    "calendario", "calendar", "google calendar",
+    "en mi calendario", "al calendario", "del calendario",
+    "mi calendario de google",
+)
+
+
 def _detect_reminder_intent(message: str) -> str | None:
     """Detecta intención de recordatorio por keywords. Retorna intent o None."""
     msg = message.lower().strip()
+
+    # Si el mensaje menciona Google Calendar, dejar que el LLM use el tool de calendar
+    if any(kw in msg for kw in _KW_CALENDAR_BYPASS):
+        return None
 
     has_delete_verb = any(kw in msg for kw in _KW_DELETE)
     has_delete_obj = any(kw in msg for kw in _KW_DELETE_OBJ)
@@ -435,7 +446,14 @@ async def chat(message: str, session_id: str, device: str = "cli",
         if parts:
             memory_context = "\n\n" + "\n\n".join(parts)
 
-    system = base_system + profile_context + morning_context + memory_context
+    # Indicar al LLM si tiene acceso a Google Calendar
+    calendar_hint = ""
+    if google_access_token:
+        calendar_hint = "\n\n[Google Calendar: CONECTADO — puedes usar la herramienta 'calendar' para leer y crear eventos.]"
+    else:
+        calendar_hint = "\n\n[Google Calendar: NO CONECTADO — si el usuario pide acceso al calendario, indícale que cierre sesión y vuelva a iniciar sesión para autorizar el acceso.]"
+
+    system = base_system + profile_context + morning_context + memory_context + calendar_hint
 
     # ── 3. Primera llamada LLM con tool schemas ──────────────────────
     msgs = [

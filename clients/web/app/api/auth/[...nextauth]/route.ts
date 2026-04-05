@@ -1,8 +1,34 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import type { JWT } from "next-auth/jwt";
 
 const CREATOR_EMAIL = "lamda94@gmail.com";
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
+
+async function refreshGoogleToken(token: JWT): Promise<JWT> {
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        grant_type: "refresh_token",
+        refresh_token: token.googleRefreshToken as string,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "refresh failed");
+    return {
+      ...token,
+      googleAccessToken: data.access_token,
+      googleTokenExpiry: Date.now() + data.expires_in * 1000,
+    };
+  } catch {
+    // Si falla el refresh, limpiar token para forzar re-login
+    return { ...token, googleAccessToken: undefined, googleTokenExpiry: 0 };
+  }
+}
 
 // Gmail ignora los puntos en el nombre de usuario
 function normalizeEmail(email: string): string {
@@ -44,11 +70,24 @@ const handler = NextAuth({
     },
 
     async jwt({ token, user, account }) {
-      // Guardar access_token de Google en el JWT
+      // Guardar tokens de Google en el JWT al login
       if (account) {
         token.googleAccessToken = account.access_token;
         token.googleRefreshToken = account.refresh_token;
+        token.googleTokenExpiry = account.expires_at
+          ? account.expires_at * 1000
+          : Date.now() + 3600 * 1000;
       }
+
+      // Refrescar access_token si expiró
+      if (
+        token.googleRefreshToken &&
+        typeof token.googleTokenExpiry === "number" &&
+        Date.now() > token.googleTokenExpiry - 60_000 // 1 min antes de expirar
+      ) {
+        token = await refreshGoogleToken(token);
+      }
+
       if (user) {
         if (isCreator(token.email!)) {
           token.approved = true;
