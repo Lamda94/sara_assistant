@@ -172,6 +172,11 @@ export default function BettingPage() {
                         </p>
                         <p style={{ margin: "3px 0 0", fontSize: 11, color: "#546E7A" }}>
                           {bet.league ?? bet.sport} — {bet.market.toUpperCase()} — {bet.selection}
+                          {bet.event_date && (
+                            <span style={{ color: "#455A64", marginLeft: 8 }}>
+                              {new Date(bet.event_date).toLocaleDateString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
