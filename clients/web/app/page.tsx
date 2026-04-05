@@ -1,11 +1,13 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { Search, MoreVertical, Send, Mic, Smile } from "lucide-react";
+import { Search, MoreVertical, Send, Mic, MicOff, Volume2, VolumeX, Smile } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { sendChat, getTime, getDateLabel, type Message } from "@/lib/api";
 
 const SESSION_ID = "lamda94-web";
+const SILENCE_THRESHOLD = 10;
+const SILENCE_TIMEOUT_MS = 1500;
 
 function ThinkingDots() {
   return (
@@ -56,13 +58,57 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const silenceTimerRef = useRef(0);
+  const silenceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  const sendRef = useRef<(text: string) => void>(() => {});
 
+  useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const send = async () => {
-    const text = input.trim();
+  // ── TTS Playback ──────────────────────────────────────────────
+
+  const stopAudio = useCallback(() => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
+    }
+  }, []);
+
+  const speak = useCallback(async (text: string) => {
+    if (!voiceEnabledRef.current || !text) return;
+    stopAudio();
+    try {
+      const res = await fetch("/api/voice/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      currentAudioRef.current = audio;
+      audio.onended = () => { URL.revokeObjectURL(url); currentAudioRef.current = null; };
+      audio.play().catch(() => {});
+    } catch {
+      // TTS failed silently
+    }
+  }, [stopAudio]);
+
+  // ── Send Message ──────────────────────────────────────────────
+
+  const send = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     setActive(true);
     const userMsg: Message = { id: Date.now(), role: "user", content: text, device: "web", time: getTime() };
@@ -76,6 +122,7 @@ export default function ChatPage() {
       setMessages(prev => prev.map(m =>
         m.id === thinkingId ? { ...m, content: data.response, typing: false, device: "web", time: getTime() } : m
       ));
+      if (voiceEnabledRef.current && data.response) speak(data.response);
     } catch {
       setMessages(prev => prev.map(m =>
         m.id === thinkingId ? { ...m, content: "Error al conectar con el backend.", typing: false, device: "system", time: getTime() } : m
@@ -86,8 +133,114 @@ export default function ChatPage() {
     }
   };
 
+  // Keep ref in sync so recorder callback can call send without stale closure
+  useEffect(() => { sendRef.current = send; });
+
+  // ── Voice Recording (STT) ─────────────────────────────────────
+
+  const stopRecording = useCallback(() => {
+    if (silenceIntervalRef.current) {
+      clearInterval(silenceIntervalRef.current);
+      silenceIntervalRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setIsListening(false);
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    stopAudio();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mimes = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"];
+      let mime = "";
+      for (const m of mimes) {
+        if (MediaRecorder.isTypeSupported(m)) { mime = m; break; }
+      }
+
+      const recorder = mime
+        ? new MediaRecorder(stream, { mimeType: mime })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+      recorder.onstop = () => {
+        const ext = mime.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(chunks, { type: mime || "audio/webm" });
+        if (blob.size < 500) return;
+        const form = new FormData();
+        form.append("audio", blob, `audio.${ext}`);
+        fetch("/api/voice/stt", { method: "POST", body: form })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.text?.trim()) sendRef.current(data.text.trim());
+          })
+          .catch(() => {});
+      };
+
+      // Silence detection
+      const audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      silenceTimerRef.current = 0;
+
+      silenceIntervalRef.current = setInterval(() => {
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        if (avg < SILENCE_THRESHOLD) {
+          silenceTimerRef.current += 100;
+          if (silenceTimerRef.current >= SILENCE_TIMEOUT_MS) {
+            stopRecording();
+          }
+        } else {
+          silenceTimerRef.current = 0;
+        }
+      }, 100);
+
+      recorder.start(200);
+      setIsListening(true);
+    } catch {
+      setIsListening(false);
+    }
+  }, [stopAudio, stopRecording]);
+
+  const toggleListen = useCallback(() => {
+    if (isListening) stopRecording();
+    else startRecording();
+  }, [isListening, stopRecording, startRecording]);
+
+  // ── Keyboard shortcut Ctrl+M ──────────────────────────────────
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "m") { e.preventDefault(); toggleListen(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [toggleListen]);
+
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  const toggleVoice = () => {
+    setVoiceEnabled(prev => {
+      if (prev) stopAudio();
+      return !prev;
+    });
   };
 
   return (
@@ -116,16 +269,24 @@ export default function ChatPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 4 }}>
                 <div style={{
                   width: 6, height: 6, borderRadius: "50%",
-                  background: active ? "#4CAF50" : "#37474F",
-                  boxShadow: active ? "0 0 6px rgba(76,175,80,0.5)" : "none",
+                  background: isListening ? "#EF5350" : active ? "#4CAF50" : "#37474F",
+                  boxShadow: isListening ? "0 0 8px rgba(239,83,80,0.6)" : active ? "0 0 6px rgba(76,175,80,0.5)" : "none",
                 }} />
-                <span style={{ fontSize: 11, color: "#455A64", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  {active ? "Active · lamda94" : "En espera · lamda94"}
+                <span style={{ fontSize: 11, color: isListening ? "#EF5350" : "#455A64", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  {isListening ? "Escuchando..." : active ? "Active · lamda94" : "En espera · lamda94"}
                 </span>
               </div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={toggleVoice} title={voiceEnabled ? "Silenciar voz" : "Activar voz"} style={{
+              width: 36, height: 36, borderRadius: 9,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: voiceEnabled ? "#78909C" : "#37474F",
+              background: "transparent", border: "none", cursor: "pointer",
+            }}>
+              {voiceEnabled ? <Volume2 size={15} strokeWidth={1.8} /> : <VolumeX size={15} strokeWidth={1.8} />}
+            </button>
             {[Search, MoreVertical].map((Icon, i) => (
               <button key={i} style={{
                 width: 36, height: 36, borderRadius: 9,
@@ -160,14 +321,15 @@ export default function ChatPage() {
               padding: "14px 20px",
               borderRadius: 14,
               background: "#1E2427",
-              border: "1px solid rgba(255,255,255,0.06)",
+              border: `1px solid ${isListening ? "rgba(239,83,80,0.3)" : "rgba(255,255,255,0.06)"}`,
+              transition: "border-color 0.15s",
             }}>
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKey}
-                placeholder="Escribe tus pensamientos..."
+                placeholder={isListening ? "Escuchando..." : "Escribe tus pensamientos..."}
                 rows={1}
                 disabled={loading}
                 style={{
@@ -178,14 +340,25 @@ export default function ChatPage() {
                 }}
               />
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, paddingBottom: 2 }}>
-                {[Smile, Mic].map((Icon, i) => (
-                  <button key={i} style={{ color: "#455A64", background: "none", border: "none", cursor: "pointer" }}>
-                    <Icon size={17} strokeWidth={1.8} />
-                  </button>
-                ))}
+                <button style={{ color: "#455A64", background: "none", border: "none", cursor: "pointer" }}>
+                  <Smile size={17} strokeWidth={1.8} />
+                </button>
+                <button
+                  onClick={toggleListen}
+                  title={isListening ? "Parar grabación" : "Grabar voz (Ctrl+M)"}
+                  style={{
+                    background: isListening ? "rgba(183,28,28,0.2)" : "none",
+                    border: "none", cursor: "pointer",
+                    color: isListening ? "#EF5350" : "#455A64",
+                    borderRadius: 6, padding: 2,
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {isListening ? <MicOff size={17} strokeWidth={1.8} /> : <Mic size={17} strokeWidth={1.8} />}
+                </button>
               </div>
             </div>
-            <button onClick={send} disabled={!input.trim() || loading} style={{
+            <button onClick={() => send()} disabled={!input.trim() || loading} style={{
               width: 46, height: 46, borderRadius: 13,
               display: "flex", alignItems: "center", justifyContent: "center",
               background: input.trim() && !loading ? "#455A64" : "#1E2427",
