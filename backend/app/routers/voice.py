@@ -23,7 +23,7 @@ def _get_whisper():
     """Carga el modelo Whisper una sola vez."""
     import os
     from faster_whisper import WhisperModel
-    model_name = os.environ.get("WHISPER_MODEL", "base")
+    model_name = os.environ.get("WHISPER_MODEL", "small")
     logger.info(f"Cargando modelo Whisper {model_name} …")
     return WhisperModel(model_name, device="cpu", compute_type="int8")
 
@@ -68,7 +68,14 @@ async def speech_to_text(audio: UploadFile = File(...)):
         model = _get_whisper()
 
         def _run():
-            segs, _ = model.transcribe(wav_path, language="es", beam_size=5)
+            segs, _ = model.transcribe(
+                wav_path,
+                language="es",
+                beam_size=5,
+                vad_filter=True,
+                vad_parameters={"min_silence_duration_ms": 300},
+                initial_prompt="Conversación en español colombiano con un asistente virtual.",
+            )
             return " ".join(s.text for s in segs).strip()
 
         text = await asyncio.to_thread(_run)

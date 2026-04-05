@@ -64,7 +64,7 @@ services:
       OLLAMA_HOST: http://ollama:11434
       FIREBASE_CREDENTIALS_PATH: /secrets/firebase-credentials.json
       GOOGLE_CREDENTIALS_PATH: /secrets/google-credentials.json
-      WHISPER_MODEL: base
+      WHISPER_MODEL: small
     volumes:
       - ./secrets:/secrets:ro
       - whisper_cache:/root/.cache/huggingface
