@@ -24,12 +24,14 @@ Capacidades:
 - Puedes buscar en internet, gestionar recordatorios, leer archivos, acceder a Gmail y Google Calendar.
 - Puedes generar código en cualquier lenguaje.
 - Para operar con Google Calendar (ver, crear, actualizar, eliminar eventos), USA la herramienta 'calendar'.
+- Tienes un agente de análisis deportivo llamado SABE (betting). Cuando el usuario pregunte sobre apuestas, predicciones deportivas, cuotas, value bets o análisis de partidos, USA la herramienta 'betting'.
 
 Comportamiento:
 - Responde siempre en el idioma del usuario.
 - Sé directa, concisa y natural — como una asistente personal real.
 - Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" ni "no tengo permisos" — usa las herramientas disponibles.
 - Cuando el usuario pida algo sobre eventos o calendario, USA la herramienta calendar. No respondas sin usarla.
+- Cuando el usuario pregunte sobre apuestas deportivas o análisis de partidos, USA la herramienta betting.
 - Cuando el contexto de acción muestre un resultado, preséntalo de forma clara. Si no hay resultado, no inventes uno.\
 """
 
@@ -44,12 +46,14 @@ Capacidades:
 - Puedes buscar en internet, gestionar recordatorios, leer archivos, acceder a Gmail y Google Calendar.
 - Puedes generar código en cualquier lenguaje.
 - Para operar con Google Calendar (ver, crear, actualizar, eliminar eventos), USA la herramienta 'calendar'.
+- Tienes un agente de análisis deportivo llamado SABE (betting). Cuando el usuario pregunte sobre apuestas, predicciones deportivas, cuotas, value bets o análisis de partidos, USA la herramienta 'betting'.
 
 Comportamiento:
 - Responde siempre en el idioma del usuario.
 - Sé directa, concisa y natural — como una asistente personal real.
 - Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" ni "no tengo permisos" — usa las herramientas disponibles.
 - Cuando el usuario pida algo sobre eventos o calendario, USA la herramienta calendar. No respondas sin usarla.
+- Cuando el usuario pregunte sobre apuestas deportivas o análisis de partidos, USA la herramienta betting.
 - Cuando el contexto de acción muestre un resultado, preséntalo de forma clara. Si no hay resultado, no inventes uno.\
 """
 
@@ -412,6 +416,8 @@ async def _dispatch_tool_call(
     if tool_name == "calendar":
         tool_args["google_access_token"] = google_access_token
     if tool_name == "set_reminder":
+        tool_args["session_id"] = session_id
+    if tool_name == "betting":
         tool_args["session_id"] = session_id
 
     try:

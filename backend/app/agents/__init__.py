@@ -4,6 +4,7 @@ from .calendar_agent import CalendarAgent
 from .email_agent import EmailAgent
 from .code_agent import CodeAgent
 from .file_agent import FileAgent
+from .betting_agent import BettingAgent
 
 AGENTS = [
     WebSearchAgent(),
@@ -12,6 +13,7 @@ AGENTS = [
     EmailAgent(),
     CodeAgent(),
     FileAgent(),
+    BettingAgent(),
 ]
 
 # Lookup por nombre para dispatch rápido

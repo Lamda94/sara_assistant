@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     sara_api_key: str = ""          # vacío = sin verificación (dev)
     allowed_origins: str = ""       # comma-separated; vacío = "*" (dev)
 
+    # --- SABE Agent (Betting) ---
+    odds_api_key: str = ""
+    sports_api_key: str = ""
+    weather_api_key: str = ""
+
     # --- Consolidation (Phase 4.2) ---
     consolidation_similarity_threshold: float = 0.88
     consolidation_max_points_per_user: int = 500
