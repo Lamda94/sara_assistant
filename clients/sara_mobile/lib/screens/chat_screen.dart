@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -131,7 +134,13 @@ class _ChatScreenState extends State<ChatScreen> {
         'rate': '+0%',
         'pitch': '-5Hz',
       });
-      await _player.play(UrlSource(uri.toString()));
+      final res = await http.get(uri, headers: {'X-API-Key': kApiKey})
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) throw Exception('TTS ${res.statusCode}');
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/sara_tts.mp3');
+      await file.writeAsBytes(res.bodyBytes);
+      await _player.play(DeviceFileSource(file.path));
     } catch (_) {
       // Fallback al TTS nativo si el backend no está disponible
       await _tts.stop();

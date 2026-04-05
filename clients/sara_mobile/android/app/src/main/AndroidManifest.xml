@@ -18,7 +18,7 @@
         tools:ignore="ProtectedPermissions"/>
 
     <application
-        android:label="sara_mobile"
+        android:label="SARA"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

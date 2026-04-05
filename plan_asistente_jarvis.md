@@ -415,17 +415,68 @@ El asistente no solo responde, también inicia.
 
 ---
 
+## FASE 6 — Inteligencia Evolutiva
+**Duración estimada: 5 semanas**
+> SARA deja de ser un chatbot y empieza a pensar.
+
+### 6.1 Procesamiento Nocturno (La Madrugada)
+
+SARA usa las horas de inactividad (2am–6am) para analizar, aprender y evolucionar.
+
+**Tareas:**
+- [ ] Job nocturno de **autoevaluación**: revisar conversaciones del día, detectar respuestas robóticas, imprecisas o donde no entendió la intención
+- [ ] **Síntesis de patrones**: cruzar datos de memoria para generar observaciones ("el usuario mencionó estrés laboral 3 veces esta semana", "lleva 5 días sin preguntar por su proyecto X")
+- [ ] **Generación de temas proactivos**: preparar conversaciones naturales basadas en contexto acumulado, no solo responder
+- [ ] **Refinamiento del perfil de personalidad**: ajustar nivel de formalidad, humor, empatía según las interacciones recientes
+- [ ] **Reporte de evolución**: log semanal de qué aprendió, qué mejoró y qué falló
+
+### 6.2 Personalidad Adaptativa
+
+El system prompt deja de ser estático y se enriquece dinámicamente.
+
+**Tareas:**
+- [ ] **Brief de personalidad**: documento generado cada noche con el tono, estilo y temas relevantes para el usuario
+- [ ] **Memoria emocional**: detectar y recordar estados emocionales del usuario a lo largo del tiempo (no solo hechos)
+- [ ] **Estilo conversacional**: SARA adapta su forma de hablar según el contexto (informal en chat casual, precisa en temas técnicos, empática en momentos difíciles)
+- [ ] **Opiniones propias**: SARA desarrolla preferencias y opiniones basadas en lo que ha aprendido del usuario, no solo repite información
+
+### 6.3 Razonamiento Profundo
+
+SARA piensa antes de responder, no solo genera texto.
+
+**Tareas:**
+- [ ] **Chain-of-thought interno**: antes de responder, SARA analiza la intención real detrás de la pregunta
+- [ ] **Contexto temporal**: SARA entiende cuándo las cosas pasaron y su relevancia actual ("eso fue hace 2 meses, ¿sigue siendo relevante?")
+- [ ] **Conexión de puntos**: relacionar información de distintas conversaciones para dar respuestas más completas
+- [ ] **Detección de contradicciones**: si el usuario dice algo que contradice lo que dijo antes, SARA lo nota y pregunta
+
+### 6.4 Aprendizaje por Feedback
+
+SARA aprende de sus errores y aciertos.
+
+**Tareas:**
+- [ ] **Feedback implícito**: si el usuario reformula la pregunta, SARA entiende que no respondió bien
+- [ ] **Feedback explícito**: el usuario puede decir "eso no es lo que quería" y SARA ajusta su enfoque
+- [ ] **Registro de aciertos**: cuando el usuario confirma o agradece, SARA refuerza ese patrón de respuesta
+- [ ] **Anti-patrones**: lista generada automáticamente de cosas que SARA no debe hacer (basada en correcciones del usuario)
+
+**Entregable de Fase 6:** SARA evoluciona sola cada noche, adapta su personalidad, razona mejor y aprende de sus errores.
+
+---
+
 ## Cronograma Resumido
 
-| Fase | Contenido                          | Duración    | Semanas   |
-|------|------------------------------------|-------------|-----------|
-| 1    | Core Backend + Memoria Vectorial   | 3 semanas   | 1 – 3     |
-| 2    | API Completa + Desktop + Web       | 4 semanas   | 4 – 7     |
-| 3    | App Móvil + Sync Offline           | 4 semanas   | 8 – 11    |
-| 4    | Knowledge Graph + Agentes          | 5 semanas   | 12 – 16   |
-| 5    | Voz + Proactividad + HUD           | 6 semanas   | 17 – 22   |
+| Fase | Contenido                          | Duración    | Semanas   | Estado      |
+|------|------------------------------------|-------------|-----------|-------------|
+| 1    | Core Backend + Memoria Vectorial   | 3 semanas   | 1 – 3     | ✅ Completa |
+| 2    | API Completa + Desktop + Web       | 4 semanas   | 4 – 7     | ✅ Completa |
+| 3    | App Móvil + Sync Offline           | 4 semanas   | 8 – 11    | ✅ Completa |
+| 4    | Knowledge Graph + Agentes          | 5 semanas   | 12 – 16   | ✅ Completa |
+| 5    | Voz + Proactividad + HUD           | 6 semanas   | 17 – 22   | ✅ Completa |
+| 5.5  | Seguridad Backend                  | 1 semana    | —         | ✅ Completa |
+| 6    | Inteligencia Evolutiva             | 5 semanas   | 23 – 27   | 📋 Pendiente |
 
-**Total estimado: 22 semanas** (adaptable según ritmo de trabajo)
+**Total estimado: 27 semanas** (adaptable según ritmo de trabajo)
 
 ---
 

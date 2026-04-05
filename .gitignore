@@ -43,3 +43,4 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+client_secret_*.json
