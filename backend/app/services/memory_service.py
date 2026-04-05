@@ -5,6 +5,9 @@ from qdrant_client.models import (
     VectorParams,
     PointStruct,
     SearchRequest,
+    Filter,
+    FieldCondition,
+    MatchValue,
 )
 from app.config import settings
 from app.services.embedding_service import get_embedding
@@ -64,6 +67,20 @@ async def retrieve_memories(query: str, top_k: int = None) -> list[dict]:
         limit=top_k,
         with_payload=True,
     )
+    filtered = [r for r in results if r.score > 0.4]
+
+    # Incrementar access_count para scoring de importancia (fire-and-forget)
+    for r in filtered:
+        try:
+            current = r.payload.get("access_count", 0)
+            await client.set_payload(
+                collection_name=settings.qdrant_collection,
+                payload={"access_count": current + 1},
+                points=[str(r.id)],
+            )
+        except Exception:
+            pass
+
     return [
         {
             "content": r.payload["content"],
@@ -71,8 +88,7 @@ async def retrieve_memories(query: str, top_k: int = None) -> list[dict]:
             "role": r.payload.get("role", "user"),
             "score": round(r.score, 3),
         }
-        for r in results
-        if r.score > 0.4
+        for r in filtered
     ]
 
 
@@ -95,45 +111,52 @@ async def list_all_memories() -> list[dict]:
     ]
 
 
-async def consolidate_memories() -> dict:
+async def consolidate_memories(session_id: str | None = None) -> dict:
     """
     Fusiona memorias similares en una sola más rica.
+    Si session_id se proporciona, solo fusiona memorias de ese usuario.
     Retorna estadísticas de la consolidación.
     """
     from groq import AsyncGroq
-    from app.config import settings as s
 
-    groq = AsyncGroq(api_key=s.groq_api_key)
+    groq = AsyncGroq(api_key=settings.groq_api_key)
 
-    # Obtener todos los puntos con vectores
+    # Filtro per-user opcional
+    scroll_filter = None
+    search_filter = None
+    if session_id:
+        scroll_filter = Filter(
+            must=[FieldCondition(key="session_id", match=MatchValue(value=session_id))]
+        )
+        search_filter = scroll_filter
+
     all_points, _ = await client.scroll(
         collection_name=settings.qdrant_collection,
-        limit=200,
+        limit=settings.consolidation_max_points_per_user,
         with_payload=True,
         with_vectors=True,
+        scroll_filter=scroll_filter,
     )
 
     if len(all_points) < 2:
-        return {"merged": 0, "total_before": len(all_points)}
+        return {"merged": 0, "removed": 0, "total_before": len(all_points)}
 
-    # Buscar pares con similitud > 0.88 (muy similares)
     merged_ids = set()
     merged_count = 0
 
-    for i, point in enumerate(all_points):
+    for point in all_points:
         if str(point.id) in merged_ids:
             continue
 
-        # Buscar vecinos muy cercanos
         similar = await client.search(
             collection_name=settings.qdrant_collection,
             query_vector=point.vector,
             limit=5,
             with_payload=True,
-            score_threshold=0.88,
+            score_threshold=settings.consolidation_similarity_threshold,
+            query_filter=search_filter,
         )
 
-        # Filtrar el mismo punto y ya fusionados
         candidates = [
             r for r in similar
             if str(r.id) != str(point.id) and str(r.id) not in merged_ids
@@ -142,17 +165,20 @@ async def consolidate_memories() -> dict:
         if not candidates:
             continue
 
-        # Fusionar con LLM
         contents = [point.payload["content"]] + [c.payload["content"] for c in candidates]
         combined = "\n".join(f"- {c}" for c in contents)
 
         try:
             resp = await groq.chat.completions.create(
-                model=s.groq_model,
+                model=settings.groq_model,
                 messages=[
                     {
                         "role": "system",
-                        "content": "Eres un asistente que fusiona recuerdos similares en uno solo más completo y conciso. Responde solo con el recuerdo fusionado, sin explicaciones.",
+                        "content": (
+                            "Eres un asistente que fusiona recuerdos similares en uno solo "
+                            "más completo y conciso. Responde solo con el recuerdo fusionado, "
+                            "sin explicaciones."
+                        ),
                     },
                     {
                         "role": "user",
@@ -164,7 +190,6 @@ async def consolidate_memories() -> dict:
             )
             fused_content = resp.choices[0].message.content.strip()
 
-            # Eliminar los originales
             ids_to_delete = [str(point.id)] + [str(c.id) for c in candidates]
             for mid in ids_to_delete:
                 merged_ids.add(mid)
@@ -174,12 +199,11 @@ async def consolidate_memories() -> dict:
                 points_selector=ids_to_delete,
             )
 
-            # Guardar la memoria fusionada
             device = point.payload.get("device", "system")
-            session_id = point.payload.get("session_id", "system")
+            sid = point.payload.get("session_id", session_id or "system")
             await store_memory(
                 fused_content,
-                session_id=session_id,
+                session_id=sid,
                 device=device,
                 role=point.payload.get("role", "user"),
                 memory_type="consolidated",
@@ -194,6 +218,57 @@ async def consolidate_memories() -> dict:
         "removed": len(merged_ids),
         "total_before": len(all_points),
     }
+
+
+async def update_importance_scores(session_id: str) -> int:
+    """
+    Calcula y actualiza importance_score en el payload de Qdrant
+    para las memorias de un usuario.
+    Score basado en tipo de memoria + frecuencia de acceso.
+    Devuelve el número de puntos actualizados.
+    """
+    scroll_filter = Filter(
+        must=[FieldCondition(key="session_id", match=MatchValue(value=session_id))]
+    )
+
+    all_points, _ = await client.scroll(
+        collection_name=settings.qdrant_collection,
+        limit=settings.consolidation_max_points_per_user,
+        with_payload=True,
+        with_vectors=False,
+        scroll_filter=scroll_filter,
+    )
+
+    if not all_points:
+        return 0
+
+    type_scores = {
+        "consolidated": 0.8,
+        "profile": 0.9,
+        "message": 0.5,
+    }
+    updated = 0
+
+    for point in all_points:
+        mem_type = point.payload.get("type", "message")
+        base = type_scores.get(mem_type, 0.5)
+
+        access_count = point.payload.get("access_count", 0)
+        access_boost = min(access_count * 0.05, 0.3)
+
+        score = round(min(base + access_boost, 1.0), 3)
+
+        try:
+            await client.set_payload(
+                collection_name=settings.qdrant_collection,
+                payload={"importance_score": score},
+                points=[str(point.id)],
+            )
+            updated += 1
+        except Exception:
+            continue
+
+    return updated
 
 
 async def extract_user_profile(session_id: str) -> str:

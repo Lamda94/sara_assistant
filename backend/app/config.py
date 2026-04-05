@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     google_credentials_path: str = "" # para CalendarAgent y EmailAgent
     file_agent_root: str = ""         # directorio raíz que FileAgent puede leer
 
+    # --- Consolidation (Phase 4.2) ---
+    consolidation_similarity_threshold: float = 0.88
+    consolidation_max_points_per_user: int = 500
+    consolidation_old_facts_days: int = 60
+    consolidation_min_facts_for_summary: int = 2
+    consolidation_importance_decay_days: int = 30
+    consolidation_cron_hour: int = 3
+    consolidation_cron_minute: int = 0
+
     class Config:
         env_file = ".env"
 

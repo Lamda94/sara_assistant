@@ -120,10 +120,15 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Consolidación nocturna — todos los días a las 3:00am
+    # Consolidación nocturna — configurable (default 3:00am)
+    from app.config import settings as cfg
     scheduler.add_job(
         daily_consolidation,
-        trigger=CronTrigger(hour=3, minute=0, timezone="America/Bogota"),
+        trigger=CronTrigger(
+            hour=cfg.consolidation_cron_hour,
+            minute=cfg.consolidation_cron_minute,
+            timezone="America/Bogota",
+        ),
         id="nightly_consolidation",
         replace_existing=True,
     )
