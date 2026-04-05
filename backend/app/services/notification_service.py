@@ -53,6 +53,57 @@ async def _send_push(token: str, title: str, body: str) -> bool:
         return False
 
 
+async def proactive_check():
+    """Revisa triggers proactivos y envía push notifications (SARA inicia contacto)."""
+    from datetime import datetime as dt
+    from sqlalchemy import select
+    from app.db.postgres import SessionLocal
+    from app.models.device_token import DeviceToken
+    from app.config import settings as cfg
+    from app.services.proactivity_service import (
+        check_proactive_triggers,
+        generate_proactive_message,
+        mark_insights_notified,
+    )
+
+    now = dt.now()
+    # Solo ejecutar en horario permitido
+    if not (cfg.proactive_start_hour <= now.hour < cfg.proactive_end_hour):
+        return
+
+    if not _firebase_ok:
+        return
+
+    try:
+        # Obtener todos los usuarios con device token registrado
+        async with SessionLocal() as s:
+            r = await s.execute(select(DeviceToken))
+            tokens = r.scalars().all()
+
+        if not tokens:
+            return
+
+        for token_row in tokens:
+            sid = token_row.session_id
+            try:
+                insights = await check_proactive_triggers(sid)
+                if not insights:
+                    continue
+
+                message = await generate_proactive_message(sid, insights)
+                sent = await _send_push(token_row.token, "SARA", message)
+
+                if sent:
+                    ids = [i["id"] for i in insights]
+                    await mark_insights_notified(ids)
+                    logger.info(f"Push proactivo enviado a {sid}: {len(insights)} insight(s)")
+            except Exception as e:
+                logger.warning(f"proactive_check error para {sid}: {e}")
+
+    except Exception as e:
+        logger.error(f"proactive_check error general: {e}")
+
+
 async def check_and_fire_reminders():
     """Revisa recordatorios vencidos y envía notificaciones push."""
     from sqlalchemy import select
@@ -120,8 +171,17 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Consolidación nocturna — configurable (default 3:00am)
+    # Proactividad — cada N horas (default 2h)
     from app.config import settings as cfg
+    scheduler.add_job(
+        proactive_check,
+        trigger="interval",
+        hours=cfg.proactive_check_interval_hours,
+        id="proactive_check",
+        replace_existing=True,
+    )
+
+    # Consolidación nocturna — configurable (default 3:00am)
     scheduler.add_job(
         daily_consolidation,
         trigger=CronTrigger(
@@ -134,5 +194,7 @@ def start_scheduler():
     )
 
     scheduler.start()
-    logger.info("Scheduler iniciado: recordatorios (30s) + consolidación (3am)")
+    logger.info(
+        f"Scheduler iniciado: recordatorios (30s) + proactividad ({cfg.proactive_check_interval_hours}h) + consolidación (3am)"
+    )
     return scheduler

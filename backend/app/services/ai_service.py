@@ -7,7 +7,9 @@ from app.config import settings
 from app.services.mem0_service import mem0_search, mem0_add
 from app.services.profile_service import get_profile, increment_and_check, generate_and_save_profile
 from app.services.knowledge_service import kg_get_context, kg_extract_and_store
-from app.services.proactivity_service import needs_morning_brief, mark_brief_sent, build_morning_context
+from app.services.proactivity_service import (
+    needs_morning_brief, mark_brief_sent, build_morning_context, extract_commitments,
+)
 
 groq_client = AsyncGroq(api_key=settings.groq_api_key)
 
@@ -506,6 +508,7 @@ async def chat(message: str, session_id: str, device: str = "cli",
         ]
         asyncio.create_task(mem0_add(turn, user_id=session_id))
         asyncio.create_task(kg_extract_and_store(turn, session_id))
+        asyncio.create_task(extract_commitments(message, answer, session_id))
 
     should_update = await increment_and_check(session_id)
     if should_update:

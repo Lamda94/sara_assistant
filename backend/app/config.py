@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     google_credentials_path: str = "" # para CalendarAgent y EmailAgent
     file_agent_root: str = ""         # directorio raíz que FileAgent puede leer
 
+    # --- Proactivity (Phase 5.2) ---
+    proactive_check_interval_hours: int = 2
+    proactive_start_hour: int = 8        # No molestar antes de las 8am
+    proactive_end_hour: int = 22         # No molestar después de las 10pm
+    proactive_inactivity_hours: int = 48  # Alertar si no hay interacción en 48h
+    proactive_max_daily_pushes: int = 3   # Máximo pushes proactivos por día por usuario
+
     # --- Consolidation (Phase 4.2) ---
     consolidation_similarity_threshold: float = 0.88
     consolidation_max_points_per_user: int = 500
