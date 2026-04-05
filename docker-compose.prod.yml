@@ -7,6 +7,7 @@ services:
       POSTGRES_USER: sara
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: sara_db
+      TZ: America/Bogota
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -56,6 +57,7 @@ services:
     container_name: sara_backend
     env_file: .env.prod
     environment:
+      TZ: America/Bogota
       DATABASE_URL: postgresql+asyncpg://sara:${POSTGRES_PASSWORD}@postgres:5432/sara_db
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6333"
