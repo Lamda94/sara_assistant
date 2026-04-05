@@ -53,7 +53,7 @@ def _is_creator(session_id: str) -> bool:
     return CREATOR_ID in session_id.lower()
 
 
-# ── Detección de intención ────────────────────────────────────────────────────
+# ── Detección de intención: solo recordatorios (fast-path) ───────────────────
 
 _KW_DELETE = (
     "elimina", "eliminar", "borra", "borrar", "limpia", "limpiar",
@@ -96,91 +96,29 @@ _KW_LIST = (
     "mis tareas", "mis avisos",
 )
 
-_KW_SEARCH = (
-    "busca", "buscar", "precio", "cotización", "noticias", "clima",
-    "cuánto vale", "cuánto cuesta", "cuanto vale", "cuanto cuesta",
-    "dólar", "bitcoin", "crypto", "bolsa", "acciones",
-    "tasa de cambio", "últimas noticias", "qué pasó", "que paso",
-)
 
-_KW_CODE = (
-    "genera código", "escribe código", "crea una función", "escribe una función",
-    "crea un script", "escribe un script", "genera un programa", "escribe un programa",
-    "crea una clase", "escribe una clase", "crea un módulo",
-    "depura", "depurar", "debug", "hay un error en", "este error",
-    "explica este código", "qué hace este código", "que hace este codigo",
-    "refactoriza", "refactorizar", "optimiza este código",
-    "en python:", "en javascript:", "en dart:", "en typescript:", "en kotlin:",
-)
-
-_KW_FILE = (
-    "lee el archivo", "leer el archivo", "abre el archivo", "abrir el archivo",
-    "muéstrame el archivo", "muestrame el archivo",
-    "lista los archivos", "lista archivos", "qué archivos", "que archivos",
-    "busca en el archivo", "busca en mis archivos", "buscar en archivos",
-    "contenido del archivo", "leer fichero",
-)
-
-_KW_CALENDAR = (
-    "calendario", "google calendar", "mis eventos", "eventos de hoy",
-    "eventos de mañana", "qué tengo en el calendario", "que tengo en el calendario",
-    "añadir al calendario", "agregar al calendario", "crear evento",
-    "cita en el calendario",
-)
-
-_KW_EMAIL = (
-    "correos", "emails", "bandeja de entrada", "inbox", "mis correos",
-    "correo nuevo", "correos sin leer", "redacta un correo", "redactar correo",
-    "envía un correo", "enviar correo", "envía un email", "enviar email",
-    "lee mi correo", "leer correo", "ver correos", "gmail",
-)
-
-
-def _intent(message: str) -> str:
+def _detect_reminder_intent(message: str) -> str | None:
+    """Detecta intención de recordatorio por keywords. Retorna intent o None."""
     msg = message.lower().strip()
 
-    # Eliminar: primero porque puede coincidir con palabras de lista
     has_delete_verb = any(kw in msg for kw in _KW_DELETE)
-    has_delete_obj  = any(kw in msg for kw in _KW_DELETE_OBJ)
+    has_delete_obj = any(kw in msg for kw in _KW_DELETE_OBJ)
     if has_delete_verb and has_delete_obj:
         return "delete_reminders"
 
-    # Modificar: antes de crear/listar (también menciona "recordatorio")
     if any(kw in msg for kw in _KW_MODIFY):
         return "modify_reminder"
 
-    # Crear: verbos específicos de creación
     if any(kw in msg for kw in _KW_CREATE):
         return "create_reminder"
 
-    # Código
-    if any(kw in msg for kw in _KW_CODE):
-        return "code"
-
-    # Archivos
-    if any(kw in msg for kw in _KW_FILE):
-        return "file"
-
-    # Calendario
-    if any(kw in msg for kw in _KW_CALENDAR):
-        return "calendar"
-
-    # Email
-    if any(kw in msg for kw in _KW_EMAIL):
-        return "email"
-
-    # Búsqueda web (antes de lista, para que "precio mañana" no sea list)
-    if any(kw in msg for kw in _KW_SEARCH):
-        return "web_search"
-
-    # Listar: cualquier mención de agenda/recordatorio/pendiente
     if any(kw in msg for kw in _KW_LIST):
         return "list_reminders"
 
-    return "chat"
+    return None
 
 
-# ── Acciones de BD (sin LLM) ─────────────────────────────────────────────────
+# ── Acciones de BD para recordatorios (sin LLM) ─────────────────────────────
 
 def _list_day_filter(message: str):
     """Devuelve date si el mensaje pide un día específico, o None para mostrar todos."""
@@ -286,7 +224,6 @@ async def _db_modify_reminder(session_id: str, old_title: str, new_title: str) -
     from app.models.reminder import Reminder
 
     async with SessionLocal() as s:
-        # Busca por coincidencia parcial case-insensitive
         r = await s.execute(
             select(Reminder).where(
                 Reminder.session_id == session_id,
@@ -297,7 +234,6 @@ async def _db_modify_reminder(session_id: str, old_title: str, new_title: str) -
         rows = r.scalars().all()
         if not rows:
             return f"No encontré ningún recordatorio que coincida con '{old_title}'."
-        # Actualiza el primero que coincida
         rem = rows[0]
         rem.title = new_title
         await s.commit()
@@ -365,7 +301,6 @@ async def _parse_reminder(message: str) -> tuple[str, datetime] | None:
             max_tokens=80,
         )
         raw = resp.choices[0].message.content.strip()
-        # Extraer JSON aunque tenga texto alrededor
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if not match:
             return None
@@ -376,90 +311,94 @@ async def _parse_reminder(message: str) -> tuple[str, datetime] | None:
         return None
 
 
-# ── Agentes externos ──────────────────────────────────────────────────────────
+# ── Helpers para tool calling y logging ──────────────────────────────────────
 
-async def _web_search(query: str) -> str:
-    from app.agents.web_search import WebSearchAgent
+async def _log_message(session_id: str, device: str, role: str,
+                       content: str, agent_used: str | None = None) -> None:
+    """Guarda un mensaje en la tabla messages (fire-and-forget)."""
+    from app.db.postgres import SessionLocal
+    from app.models.conversation import Message
     try:
-        result = await WebSearchAgent().run(query=query, max_results=4)
-        return result if result and "No se encontraron" not in result else ""
+        async with SessionLocal() as s:
+            s.add(Message(
+                session_id=session_id,
+                device=device,
+                role=role,
+                content=content,
+                agent_used=agent_used,
+            ))
+            await s.commit()
     except Exception:
-        return ""
+        pass
 
 
-async def _run_code_agent(message: str) -> str:
-    from app.agents.code_agent import CodeAgent
-    # Detectar lenguaje mencionado en el mensaje
-    lang = "python"
-    for l in ("javascript", "typescript", "dart", "kotlin", "go", "rust", "java", "bash"):
-        if l in message.lower():
-            lang = l
-            break
-    try:
-        return await CodeAgent().run(task=message, language=lang)
-    except Exception as e:
-        return f"Error en CodeAgent: {e}"
+async def _dispatch_tool_call(
+    tool_name: str, tool_args: dict,
+    session_id: str, google_access_token: str | None,
+) -> str:
+    """Ejecuta el agente identificado por tool_name con los argumentos dados."""
+    from app.agents import AGENT_MAP
 
+    agent = AGENT_MAP.get(tool_name)
+    if not agent:
+        return f"Agente '{tool_name}' no encontrado."
 
-async def _run_file_agent(message: str) -> str:
-    from app.agents.file_agent import FileAgent
-    msg = message.lower()
-    if any(k in msg for k in ("lista", "qué archivos", "que archivos", "listar")):
-        action = "list"
-    elif any(k in msg for k in ("busca en", "buscar en", "busca el texto")):
-        action = "search"
-    else:
-        action = "read"
-
-    # Intento extraer ruta del mensaje (entre comillas o después de "archivo")
-    import re
-    path_match = re.search(r'["\']([^"\']+)["\']', message)
-    path = path_match.group(1) if path_match else ""
+    # Inyectar parámetros de contexto que el LLM no puede proporcionar
+    if tool_name == "calendar":
+        tool_args["google_access_token"] = google_access_token
+    if tool_name == "set_reminder":
+        tool_args["session_id"] = session_id
 
     try:
-        return await FileAgent().run(action=action, path=path, query=message)
+        return await agent.run(**tool_args)
     except Exception as e:
-        return f"Error en FileAgent: {e}"
-
-
-async def _run_calendar_agent(message: str, google_access_token: str | None = None) -> str:
-    from app.agents.calendar_agent import CalendarAgent
-    msg = message.lower()
-    action = "create" if any(k in msg for k in ("añadir", "agregar", "crear evento", "nueva cita")) else "list"
-    try:
-        return await CalendarAgent().run(action=action, google_access_token=google_access_token)
-    except Exception as e:
-        return f"Error en CalendarAgent: {e}"
-
-
-async def _run_email_agent(message: str) -> str:
-    from app.agents.email_agent import EmailAgent
-    msg = message.lower()
-    if any(k in msg for k in ("envía", "enviar", "redacta", "mandar")):
-        action = "send"
-    elif any(k in msg for k in ("lee", "leer", "abre", "abrir", "muéstrame")):
-        action = "read"
-    else:
-        action = "list"
-    try:
-        return await EmailAgent().run(action=action)
-    except Exception as e:
-        return f"Error en EmailAgent: {e}"
+        return f"Error ejecutando {tool_name}: {e}"
 
 
 # ── Función principal ─────────────────────────────────────────────────────────
 
-async def chat(message: str, session_id: str, device: str = "cli", google_access_token: str | None = None) -> str:
+async def chat(message: str, session_id: str, device: str = "cli",
+               google_access_token: str | None = None) -> dict:
+    from app.agents import TOOL_SCHEMAS
+
     is_creator = _is_creator(session_id)
     now_str = datetime.now().strftime("%A %d de %B de %Y, %H:%M")
     template = _SYSTEM_CREATOR_TEMPLATE if is_creator else _SYSTEM_BASE_TEMPLATE
     base_system = template.format(now=now_str)
 
-    # Perfil evolutivo del usuario (siempre inyectado si existe)
+    # ── 1. Reminder fast-path (keyword detection) ─────────────────────
+    reminder_intent = _detect_reminder_intent(message)
+    if reminder_intent:
+        if reminder_intent == "modify_reminder":
+            parsed = await _parse_modify(message)
+            if parsed:
+                old_title, new_title = parsed
+                answer = await _db_modify_reminder(session_id, old_title, new_title)
+            else:
+                answer = "No pude entender qué recordatorio modificar. Indícame: 'cambia X a Y'."
+        elif reminder_intent == "delete_reminders":
+            answer = await _db_delete_reminders(session_id)
+        elif reminder_intent == "create_reminder":
+            parsed = await _parse_reminder(message)
+            if parsed:
+                title, dt = parsed
+                answer = await _db_create_reminder(title, dt, session_id)
+            else:
+                answer = "No pude determinar la fecha del recordatorio. Indícame cuándo quieres el recordatorio."
+        elif reminder_intent == "list_reminders":
+            day = _list_day_filter(message)
+            answer = await _db_list_reminders(session_id, day=day)
+        else:
+            answer = "Intención de recordatorio no reconocida."
+
+        asyncio.create_task(_log_message(session_id, device, "user", message))
+        asyncio.create_task(_log_message(session_id, device, "assistant", answer, agent_used=reminder_intent))
+        return {"response": answer, "agent_used": reminder_intent}
+
+    # ── 2. Build system prompt (profile + memory + KG + morning) ──────
     profile_text = await get_profile(session_id)
     profile_context = f"\n\n[Perfil del usuario]\n{profile_text}" if profile_text else ""
 
-    # Contexto matutino (primer uso del día)
     morning_context = ""
     if needs_morning_brief(session_id):
         mark_brief_sent(session_id)
@@ -467,7 +406,6 @@ async def chat(message: str, session_id: str, device: str = "cli", google_access
         if ctx:
             morning_context = f"\n\n{ctx}"
 
-    # Memoria Mem0 (hechos atómicos) + Knowledge Graph (relaciones entre conceptos)
     memory_context = ""
     if len(message.split()) > 4:
         facts, kg_triples = await asyncio.gather(
@@ -482,72 +420,68 @@ async def chat(message: str, session_id: str, device: str = "cli", google_access
         if parts:
             memory_context = "\n\n" + "\n\n".join(parts)
 
-    # Detectar intención y ejecutar acción directamente
-    intent = _intent(message)
-    action_context = ""
-    direct_answer = None   # si se asigna, se devuelve sin pasar por LLM
+    system = base_system + profile_context + morning_context + memory_context
 
-    if intent == "modify_reminder":
-        parsed = await _parse_modify(message)
-        if parsed:
-            old_title, new_title = parsed
-            direct_answer = await _db_modify_reminder(session_id, old_title, new_title)
-        else:
-            direct_answer = "No pude entender qué recordatorio modificar. Indícame: 'cambia X a Y'."
-
-    elif intent == "delete_reminders":
-        direct_answer = await _db_delete_reminders(session_id)
-
-    elif intent == "create_reminder":
-        parsed = await _parse_reminder(message)
-        if parsed:
-            title, dt = parsed
-            direct_answer = await _db_create_reminder(title, dt, session_id)
-        else:
-            direct_answer = "No pude determinar la fecha del recordatorio. Indícame cuándo quieres el recordatorio."
-
-    elif intent == "list_reminders":
-        day = _list_day_filter(message)
-        direct_answer = await _db_list_reminders(session_id, day=day)
-
-    elif intent == "code":
-        direct_answer = await _run_code_agent(message)
-
-    elif intent == "file":
-        direct_answer = await _run_file_agent(message)
-
-    elif intent == "calendar":
-        result = await _run_calendar_agent(message, google_access_token=google_access_token)
-        action_context = f"\n\n[Calendario]\n{result}"
-
-    elif intent == "email":
-        result = await _run_email_agent(message)
-        action_context = f"\n\n[Email]\n{result}"
-
-    elif intent == "web_search":
-        result = await _web_search(message)
-        if result:
-            action_context = f"\n\n[Resultados de búsqueda]\n{result}"
-
-    # Para crear/eliminar: respuesta directa, sin LLM (evita alucinaciones)
-    if direct_answer is not None:
-        return direct_answer
-
-    # Para listar/buscar/chat: LLM redacta la respuesta
-    system = base_system + profile_context + morning_context + memory_context + action_context
-    temp = 0.3 if action_context else 0.7
+    # ── 3. Primera llamada LLM con tool schemas ──────────────────────
     response = await groq_client.chat.completions.create(
         model=settings.groq_model,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": message},
         ],
-        temperature=temp,
+        tools=TOOL_SCHEMAS,
+        tool_choice="auto",
+        temperature=0.7,
         max_tokens=600,
     )
-    answer = response.choices[0].message.content or ""
+    choice = response.choices[0]
+    agent_used = None
 
-    # Guardar en Mem0 + Knowledge Graph en background
+    # ── 4. Si tool call: despachar agente + segunda llamada LLM ──────
+    if choice.message.tool_calls:
+        tc = choice.message.tool_calls[0]
+        tool_name = tc.function.name
+        agent_used = tool_name
+
+        try:
+            tool_args = json.loads(tc.function.arguments)
+        except (json.JSONDecodeError, TypeError):
+            # LLM produjo JSON malformado — fallback a chat normal
+            answer = choice.message.content or "Lo siento, hubo un error procesando tu solicitud."
+            agent_used = None
+            asyncio.create_task(_log_message(session_id, device, "user", message))
+            asyncio.create_task(_log_message(session_id, device, "assistant", answer, agent_used=agent_used))
+            return {"response": answer, "agent_used": agent_used}
+
+        tool_result = await _dispatch_tool_call(
+            tool_name, tool_args, session_id, google_access_token
+        )
+
+        # Segunda llamada LLM con resultado del tool
+        response2 = await groq_client.chat.completions.create(
+            model=settings.groq_model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": message},
+                choice.message,
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": tool_result,
+                },
+            ],
+            temperature=0.3,
+            max_tokens=600,
+        )
+        answer = response2.choices[0].message.content or ""
+    else:
+        answer = choice.message.content or ""
+
+    # ── 5. Log messages ──────────────────────────────────────────────
+    asyncio.create_task(_log_message(session_id, device, "user", message))
+    asyncio.create_task(_log_message(session_id, device, "assistant", answer, agent_used=agent_used))
+
+    # ── 6. Background tasks (sin cambios) ────────────────────────────
     _SKIP_SAVE = ("hay algo más", "en qué puedo", "necesitas algo",
                   "estoy aquí para", "<function=")
     if (answer
@@ -560,9 +494,8 @@ async def chat(message: str, session_id: str, device: str = "cli", google_access
         asyncio.create_task(mem0_add(turn, user_id=session_id))
         asyncio.create_task(kg_extract_and_store(turn, session_id))
 
-    # Incrementar contador y regenerar perfil en background cada 10 conversaciones
     should_update = await increment_and_check(session_id)
     if should_update:
         asyncio.create_task(generate_and_save_profile(session_id))
 
-    return answer
+    return {"response": answer, "agent_used": agent_used}
