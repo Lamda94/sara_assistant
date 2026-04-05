@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 _BASE = "https://api.the-odds-api.com/v4"
 
 
-async def get_upcoming_events(sport: str = "soccer", regions: str = "eu,us", markets: str = "h2h") -> list[dict]:
+async def get_upcoming_events(sport: str = "soccer", regions: str = "eu,us", markets: str = "h2h,totals,spreads") -> list[dict]:
     """Obtiene eventos próximos con cuotas de múltiples bookmakers."""
     sport_key = _map_sport(sport)
     url = f"{_BASE}/sports/{sport_key}/odds"
@@ -63,7 +63,7 @@ async def get_sports() -> list[dict]:
 
 
 def find_best_odds(event: dict, market: str = "h2h") -> dict:
-    """Encuentra las mejores cuotas entre bookmakers para cada outcome."""
+    """Encuentra las mejores cuotas entre bookmakers para cada outcome de un mercado."""
     best = {}
     for bm in event.get("bookmakers", []):
         for mkt in bm.get("markets", []):
@@ -71,10 +71,27 @@ def find_best_odds(event: dict, market: str = "h2h") -> dict:
                 continue
             for outcome in mkt["outcomes"]:
                 name = outcome["name"]
+                if outcome.get("point") is not None:
+                    name = f"{name} {outcome['point']}"
                 price = outcome["price"]
                 if name not in best or price > best[name]["price"]:
                     best[name] = {"price": price, "bookmaker": bm["title"]}
     return best
+
+
+def find_all_markets(event: dict) -> dict[str, dict]:
+    """Retorna las mejores cuotas de TODOS los mercados disponibles."""
+    all_markets = {}
+    market_keys = set()
+    for bm in event.get("bookmakers", []):
+        for mkt in bm.get("markets", []):
+            market_keys.add(mkt["key"])
+
+    for mk in market_keys:
+        best = find_best_odds(event, market=mk)
+        if best:
+            all_markets[mk] = best
+    return all_markets
 
 
 def _map_sport(sport: str) -> str:

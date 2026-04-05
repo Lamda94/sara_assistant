@@ -236,27 +236,27 @@ async def _generate_training_batch():
             break
 
         try:
-            bet_placed = await _analyze_and_bet(ev)
-            if bet_placed:
-                bets_placed += 1
+            placed = await _analyze_and_bet_multi(ev)
+            bets_placed += placed
         except Exception as e:
             logger.error("[SABE-TRAIN] Error analizando evento: %s", e)
 
     logger.warning("[SABE-TRAIN] Batch generado: %d/%d apuestas colocadas.", bets_placed, _BATCH_SIZE)
 
 
-async def _analyze_and_bet(event: dict) -> bool:
-    """Analiza un evento y coloca apuesta simulada si hay valor."""
+async def _analyze_and_bet_multi(event: dict) -> int:
+    """Analiza un evento y coloca MÚLTIPLES apuestas en diferentes mercados."""
     home = event.get("home_team", "?")
     away = event.get("away_team", "?")
     sport_key = event.get("_sport_key", "soccer")
     sport_title = event.get("sport_title", sport_key)
     event_name = f"{home} vs {away}"
 
-    from app.services.odds_service import find_best_odds
-    best = find_best_odds(event)
-    if not best:
-        return False
+    from app.services.odds_service import find_all_markets
+
+    all_markets = find_all_markets(event)
+    if not all_markets:
+        return 0
 
     # Obtener datos adicionales
     from app.services.sports_data_service import get_h2h, get_team_form
@@ -268,16 +268,20 @@ async def _analyze_and_bet(event: dict) -> bool:
         form_home = await get_team_form(home)
         form_away = await get_team_form(away)
     except Exception:
-        pass  # No bloquear si falla
+        pass
 
-    # Construir contexto
-    odds_lines = [f"  {k}: {v['price']:.2f} ({v['bookmaker']})" for k, v in best.items()]
+    # Construir contexto con TODOS los mercados
     context_parts = [
         f"Evento: {event_name}",
         f"Deporte: {sport_title}",
         f"Liga: {event.get('sport_title', 'N/A')}",
-        f"Mejores cuotas:\n" + "\n".join(odds_lines),
     ]
+
+    for mkt_name, mkt_odds in all_markets.items():
+        label = {"h2h": "Ganador (1X2)", "totals": "Total goles/puntos (Over/Under)",
+                 "spreads": "Handicap"}.get(mkt_name, mkt_name)
+        odds_lines = [f"    {k}: {v['price']:.2f} ({v['bookmaker']})" for k, v in mkt_odds.items()]
+        context_parts.append(f"  Mercado {label}:\n" + "\n".join(odds_lines))
 
     if h2h:
         w_home, w_away, draws = 0, 0, 0
@@ -308,111 +312,125 @@ async def _analyze_and_bet(event: dict) -> bool:
 
     context = "\n".join(context_parts)
 
-    # LLM análisis + decisión de apuesta
+    # LLM genera MÚLTIPLES apuestas por evento
     resp = await _groq.chat.completions.create(
         model=settings.groq_model,
         messages=[
             {
                 "role": "system",
                 "content": (
-                    "Eres SABE en modo ENTRENAMIENTO. Estás aprendiendo, así que DEBES apostar "
-                    "en la mayoría de eventos para generar datos de aprendizaje.\n"
-                    "Analiza las cuotas y los datos disponibles. Elige el resultado más probable.\n"
-                    "Responde SOLO en JSON:\n"
-                    '{"bet": true, "market": "h2h", '
-                    '"selection": "nombre exacto del equipo/resultado de las cuotas", '
-                    '"predicted_prob": 0.XX, "confidence": NN, '
-                    '"analysis": "resumen breve del análisis"}\n'
-                    "IMPORTANTE: selection debe coincidir EXACTAMENTE con uno de los nombres "
-                    "de las cuotas proporcionadas. Apuesta siempre que tengas una opinión."
+                    "Eres SABE en modo ENTRENAMIENTO. Debes generar VARIAS apuestas por evento "
+                    "en DIFERENTES mercados para diversificar tu aprendizaje.\n\n"
+                    "Mercados disponibles:\n"
+                    "- h2h: quién gana (o empate)\n"
+                    "- totals: Over/Under de goles, puntos, etc.\n"
+                    "- spreads: handicap de goles/puntos\n\n"
+                    "Responde con un JSON array de apuestas (mínimo 2, máximo 4):\n"
+                    "[{\"market\": \"h2h\", \"selection\": \"nombre EXACTO de las cuotas\", "
+                    "\"predicted_prob\": 0.XX, \"confidence\": NN, "
+                    "\"analysis\": \"razón breve\"},\n"
+                    "{\"market\": \"totals\", \"selection\": \"Over 2.5\", ...}]\n\n"
+                    "REGLAS:\n"
+                    "- selection debe coincidir EXACTAMENTE con un nombre de las cuotas\n"
+                    "- Diversifica: no hagas todas del mismo mercado\n"
+                    "- Apuesta siempre, estás entrenando\n"
+                    "- Solo responde el JSON array, nada más"
                 ),
             },
             {"role": "user", "content": context},
         ],
         temperature=0.3,
-        max_tokens=300,
+        max_tokens=600,
     )
 
     try:
         text = resp.choices[0].message.content.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        decision = json.loads(text)
+        decisions = json.loads(text)
+        if isinstance(decisions, dict):
+            decisions = [decisions]
     except Exception:
-        return False
+        return 0
 
-    if not decision.get("bet"):
-        return False
+    # Parsear fecha
+    event_date = datetime.utcnow()
+    if event.get("commence_time"):
+        try:
+            dt = datetime.fromisoformat(event["commence_time"].replace("Z", "+00:00"))
+            event_date = dt.replace(tzinfo=None)
+        except Exception:
+            pass
 
-    # Encontrar la cuota para la selección
-    selection = decision.get("selection", "")
-    odds = 2.0
-    for name, info in best.items():
-        if name.lower() in selection.lower() or selection.lower() in name.lower():
-            odds = info["price"]
-            break
+    placed = 0
+    for decision in decisions:
+        try:
+            market = decision.get("market", "h2h")
+            selection = decision.get("selection", "")
+            if not selection:
+                continue
 
-    predicted_prob = decision.get("predicted_prob", 0.55)
-    implied_prob = 1 / odds if odds > 1 else 0.5
-    edge = predicted_prob - implied_prob
+            # Buscar cuota
+            market_odds = all_markets.get(market, all_markets.get("h2h", {}))
+            odds = 2.0
+            for name, info in market_odds.items():
+                if name.lower() in selection.lower() or selection.lower() in name.lower():
+                    odds = info["price"]
+                    break
 
-    if edge < 0.02:  # Threshold bajo en entrenamiento para generar más datos
-        return False
+            predicted_prob = decision.get("predicted_prob", 0.55)
+            implied_prob = 1 / odds if odds > 1 else 0.5
+            edge = predicted_prob - implied_prob
 
-    # Kelly criterion
-    kelly = (edge * odds - 1) / (odds - 1) if odds > 1 else 0
-    stake_pct = min(max(kelly, 0.01), 0.05)
+            if edge < 0.02:
+                continue
 
-    # Obtener/crear bankroll
-    async with SessionLocal() as s:
-        br = (await s.execute(
-            select(SabeBankroll).where(SabeBankroll.session_id == _SESSION)
-        )).scalar_one_or_none()
-        if not br:
-            br = SabeBankroll(session_id=_SESSION)
-            s.add(br)
-            await s.flush()
+            kelly = (edge * odds - 1) / (odds - 1) if odds > 1 else 0
+            stake_pct = min(max(kelly, 0.01), 0.05)
 
-        stake_units = round(br.current_balance * stake_pct, 2)
+            async with SessionLocal() as s:
+                br = (await s.execute(
+                    select(SabeBankroll).where(SabeBankroll.session_id == _SESSION)
+                )).scalar_one_or_none()
+                if not br:
+                    br = SabeBankroll(session_id=_SESSION)
+                    s.add(br)
+                    await s.flush()
 
-        # Parsear fecha del evento (naive, sin timezone para PostgreSQL)
-        event_date = datetime.utcnow()
-        if event.get("commence_time"):
-            try:
-                dt = datetime.fromisoformat(
-                    event["commence_time"].replace("Z", "+00:00")
+                stake_units = round(br.current_balance * stake_pct, 2)
+
+                bet = SimBet(
+                    session_id=_SESSION,
+                    sport=sport_key,
+                    event_name=event_name,
+                    event_date=event_date,
+                    event_api_id=event.get("id"),
+                    league=sport_title,
+                    market=market,
+                    selection=selection,
+                    odds=odds,
+                    stake_pct=stake_pct,
+                    stake_units=stake_units,
+                    predicted_prob=predicted_prob,
+                    implied_prob=round(implied_prob, 4),
+                    edge=round(edge, 4),
+                    confidence=decision.get("confidence", 50),
+                    analysis_summary=decision.get("analysis", "")[:1000],
+                    factors_used={"stats": 0.4, "market": 0.25, "external": 0.2, "sentiment": 0.15},
                 )
-                event_date = dt.replace(tzinfo=None)
-            except Exception:
-                pass
+                s.add(bet)
+                await s.commit()
 
-        bet = SimBet(
-            session_id=_SESSION,
-            sport=sport_key,
-            event_name=event_name,
-            event_date=event_date,
-            event_api_id=event.get("id"),
-            league=sport_title,
-            market=decision.get("market", "h2h"),
-            selection=selection,
-            odds=odds,
-            stake_pct=stake_pct,
-            stake_units=stake_units,
-            predicted_prob=predicted_prob,
-            implied_prob=round(implied_prob, 4),
-            edge=round(edge, 4),
-            confidence=decision.get("confidence", 50),
-            analysis_summary=decision.get("analysis", "")[:1000],
-            factors_used={"stats": 0.4, "market": 0.25, "external": 0.2, "sentiment": 0.15},
-        )
-        s.add(bet)
-        await s.commit()
+            logger.info(
+                "[SABE-TRAIN] Apuesta: %s → %s [%s] @ %.2f (edge %.1f%%)",
+                event_name, selection, market, odds, edge * 100,
+            )
+            placed += 1
 
-    logger.info(
-        "[SABE-TRAIN] Apuesta: %s → %s @ %.2f (edge %.1f%%)",
-        event_name, selection, odds, edge * 100,
-    )
-    return True
+        except Exception as e:
+            logger.error("[SABE-TRAIN] Error colocando bet: %s", e)
+
+    return placed
 
 
 async def _notify_certified():
