@@ -423,22 +423,35 @@ async def chat(message: str, session_id: str, device: str = "cli",
     system = base_system + profile_context + morning_context + memory_context
 
     # ── 3. Primera llamada LLM con tool schemas ──────────────────────
-    response = await groq_client.chat.completions.create(
-        model=settings.groq_model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": message},
-        ],
-        tools=TOOL_SCHEMAS,
-        tool_choice="auto",
-        temperature=0.7,
-        max_tokens=600,
-    )
+    msgs = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": message},
+    ]
+    tool_call_failed = False
+    try:
+        response = await groq_client.chat.completions.create(
+            model=settings.groq_model,
+            messages=msgs,
+            tools=TOOL_SCHEMAS,
+            tool_choice="auto",
+            temperature=0.7,
+            max_tokens=600,
+        )
+    except Exception:
+        # Tool calling falló (modelo generó formato inválido) — fallback sin tools
+        tool_call_failed = True
+        response = await groq_client.chat.completions.create(
+            model=settings.groq_model,
+            messages=msgs,
+            temperature=0.7,
+            max_tokens=600,
+        )
+
     choice = response.choices[0]
     agent_used = None
 
     # ── 4. Si tool call: despachar agente + segunda llamada LLM ──────
-    if choice.message.tool_calls:
+    if not tool_call_failed and choice.message.tool_calls:
         tc = choice.message.tool_calls[0]
         tool_name = tc.function.name
         agent_used = tool_name
