@@ -8,6 +8,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../api.dart';
 import '../monitoring/monitoring_setup_screen.dart';
+import 'betting_screen.dart';
 import '../theme.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
@@ -337,6 +338,14 @@ class _ChatScreenState extends State<ChatScreen> {
             color: SaraColors.secondary,
             onPressed: () => Navigator.push(
               context, MaterialPageRoute(builder: (_) => const MemoryScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.trending_up, size: 20),
+            color: SaraColors.secondary,
+            tooltip: 'SABE',
+            onPressed: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const BettingScreen()),
             ),
           ),
           IconButton(
