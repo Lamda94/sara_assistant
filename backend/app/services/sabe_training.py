@@ -211,9 +211,24 @@ async def _generate_training_batch():
         logger.warning("[SABE-TRAIN] No se encontraron eventos. Abortando batch.")
         return
 
-    # Seleccionar eventos al azar
-    random.shuffle(all_events)
-    candidates = all_events[:_BATCH_SIZE * 2]  # Doble para tener de dónde filtrar
+    # Filtrar solo eventos en las próximas 48h para entrenamiento rápido
+    from datetime import timedelta
+    cutoff = datetime.utcnow() + timedelta(hours=48)
+    near_events = []
+    for ev in all_events:
+        try:
+            dt = datetime.fromisoformat(ev.get("commence_time", "").replace("Z", "+00:00"))
+            if dt.replace(tzinfo=None) <= cutoff:
+                near_events.append(ev)
+        except Exception:
+            pass
+
+    if not near_events:
+        logger.warning("[SABE-TRAIN] No hay eventos en las próximas 48h. Abortando batch.")
+        return
+
+    random.shuffle(near_events)
+    candidates = near_events[:_BATCH_SIZE * 2]
 
     bets_placed = 0
     for ev in candidates:
