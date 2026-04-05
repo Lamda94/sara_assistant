@@ -362,7 +362,17 @@ async def _get_recent_history(session_id: str) -> list[dict]:
 
     # Revertir a orden cronológico (más viejo primero)
     rows = list(reversed(rows))
-    return [{"role": row.role, "content": row.content} for row in rows]
+    # Filtrar mensajes vacíos o que sean tool calls crudos
+    result = []
+    for row in rows:
+        c = (row.content or "").strip()
+        if not c:
+            continue
+        # Saltar tool calls crudos que se guardaron por error
+        if re.match(r'^(?:<function=)?\w+[>=(]\s*\{', c):
+            continue
+        result.append({"role": row.role, "content": c})
+    return result
 
 
 async def _log_message(session_id: str, device: str, role: str,
@@ -532,25 +542,62 @@ async def chat(message: str, session_id: str, device: str = "cli",
             tool_name, tool_args, session_id, google_access_token
         )
 
-        # Segunda llamada LLM con resultado del tool
+        # Segunda llamada LLM con resultado del tool (incluye historial)
+        msgs_followup = [{"role": "system", "content": system}]
+        msgs_followup.extend(history)
+        msgs_followup.append({"role": "user", "content": message})
+        msgs_followup.append(choice.message)
+        msgs_followup.append({
+            "role": "tool",
+            "tool_call_id": tc.id,
+            "content": tool_result,
+        })
         response2 = await groq_client.chat.completions.create(
             model=settings.groq_model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": message},
-                choice.message,
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": tool_result,
-                },
-            ],
+            messages=msgs_followup,
             temperature=0.3,
             max_tokens=600,
         )
         answer = response2.choices[0].message.content or ""
     else:
         answer = choice.message.content or ""
+
+    # ── 4b. Fallback: detectar tool calls emitidos como texto plano ──
+    if answer and not agent_used:
+        raw_match = re.match(
+            r'^(?:<function=)?(\w+)[>=(]\s*(\{.*\})\s*[)</]?\s*$',
+            answer.strip(), re.DOTALL,
+        )
+        if raw_match:
+            from app.agents import AGENT_MAP
+            raw_tool_name = raw_match.group(1)
+            if raw_tool_name in AGENT_MAP:
+                try:
+                    raw_args = json.loads(raw_match.group(2))
+                    # Limpiar parámetros espurios del LLM
+                    raw_args = {
+                        k: v for k, v in raw_args.items()
+                        if k in AGENT_MAP[raw_tool_name].parameters.get("properties", {})
+                    }
+                    tool_result = await _dispatch_tool_call(
+                        raw_tool_name, raw_args, session_id, google_access_token
+                    )
+                    agent_used = raw_tool_name
+                    # Segunda llamada LLM para presentar resultado
+                    response3 = await groq_client.chat.completions.create(
+                        model=settings.groq_model,
+                        messages=[
+                            {"role": "system", "content": system},
+                            *history,
+                            {"role": "user", "content": message},
+                            {"role": "assistant", "content": f"[Resultado de {raw_tool_name}]: {tool_result}"},
+                        ],
+                        temperature=0.3,
+                        max_tokens=600,
+                    )
+                    answer = response3.choices[0].message.content or tool_result
+                except (json.JSONDecodeError, Exception):
+                    pass  # Si falla el parsing, mantener la respuesta original
 
     # ── 5. Log messages ──────────────────────────────────────────────
     asyncio.create_task(_log_message(session_id, device, "user", message))
