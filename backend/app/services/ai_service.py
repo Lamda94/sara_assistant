@@ -69,7 +69,7 @@ _KW_DELETE_OBJ = (
 _KW_CREATE = (
     "recuérdame", "recuerdame", "recuerda",
     "pon un recordatorio", "pon recordatorio", "ponme",
-    "crea un recordatorio", "crea recordatorio",
+    "crea un recordatorio", "crea recordatorio", "crear un recordatorio",
     "agrega un recordatorio", "agrega recordatorio",
     "agrega uno", "agrega un", "agrega algo",
     "añade", "añádeme", "añade un", "añade uno",
@@ -78,6 +78,12 @@ _KW_CREATE = (
     "programa recordatorio", "programar recordatorio",
     "guardar recordatorio", "guarda recordatorio",
     "setea", "setear",
+    # Variantes comunes de voz (STT)
+    "abre un recordatorio", "abre recordatorio", "abrir recordatorio",
+    "abramos un recordatorio", "abramos recordatorio",
+    "abreamos un recordatorio", "abreamos recordatorio",
+    "hagamos un recordatorio", "haz un recordatorio",
+    "pon me un recordatorio", "hazme un recordatorio",
 )
 
 _KW_MODIFY = (
@@ -281,7 +287,9 @@ async def _db_create_reminder(title: str, remind_at: datetime, session_id: str) 
 
 async def _parse_reminder(message: str) -> tuple[str, datetime] | None:
     """LLM extrae título y fecha del texto. Devuelve (title, datetime) o None."""
-    today = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now = datetime.now()
+    today_full = now.strftime("%A %d de %B de %Y, %H:%M")
+    today_iso = now.strftime("%Y-%m-%d")
     try:
         resp = await groq_client.chat.completions.create(
             model=settings.groq_model,
@@ -289,11 +297,16 @@ async def _parse_reminder(message: str) -> tuple[str, datetime] | None:
                 {
                     "role": "system",
                     "content": (
-                        f"Ahora mismo es {today}. "
-                        "Extrae el título y la fecha/hora de un recordatorio del mensaje. "
+                        f"Fecha y hora actual: {today_full} ({today_iso}). "
+                        f"Año actual: {now.year}. "
+                        "Extrae el título y la fecha/hora de un recordatorio del mensaje del usuario. "
                         'Responde SOLO con JSON: {"title": "...", "datetime": "YYYY-MM-DDTHH:MM:SS"}. '
-                        "Si no hay fecha clara, usa mañana a las 09:00. "
-                        "Si dice 'a las 8' sin AM/PM y es de mañana, usa 08:00. "
+                        "Reglas importantes: "
+                        "- Si el usuario dice una fecha específica como '6 de abril' o 'lunes 6', usa ESA fecha exacta. "
+                        f"- Si dice 'lunes' sin fecha, calcula el próximo lunes desde {today_iso}. "
+                        "- Si no hay hora, usa 09:00. "
+                        "- Si no hay fecha clara, usa mañana. "
+                        "- Si dice 'a las 8' sin AM/PM y es de mañana, usa 08:00. "
                         "No incluyas explicaciones, solo el JSON."
                     ),
                 },
