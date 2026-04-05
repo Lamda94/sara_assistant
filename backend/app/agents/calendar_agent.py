@@ -10,7 +10,9 @@ class CalendarAgent(BaseAgent):
     description = (
         "Lee, crea, actualiza y elimina eventos en Google Calendar. "
         "Úsalo cuando el usuario pregunte por sus eventos del calendario, "
-        "quiera añadir, modificar, eliminar una cita o consultar su agenda de Google."
+        "quiera añadir, modificar, eliminar una cita o consultar su agenda de Google. "
+        "Los eventos se listan enumerados (1, 2, 3…). Para update/delete el usuario "
+        "puede referirse al número del evento en la lista."
     )
     parameters = {
         "type": "object",
@@ -40,6 +42,10 @@ class CalendarAgent(BaseAgent):
                 "type": "string",
                 "description": "Texto para buscar el evento a modificar o eliminar",
             },
+            "event_number": {
+                "type": "integer",
+                "description": "Número del evento en la lista (1, 2, 3…) para update o delete",
+            },
             "new_title": {
                 "type": "string",
                 "description": "Nuevo título del evento (solo para update)",
@@ -54,10 +60,45 @@ class CalendarAgent(BaseAgent):
         creds = Credentials(token=access_token)
         return build("calendar", "v3", credentials=creds)
 
+    async def _fetch_events(self, service, days_ahead: int = 7,
+                            query: str = "", max_results: int = 15) -> list:
+        """Obtiene eventos del calendario. Reutilizado por list, update y delete."""
+        import asyncio
+        from datetime import datetime, timezone, timedelta
+
+        now = datetime.now(timezone.utc)
+        end = now + timedelta(days=days_ahead)
+
+        kwargs = {
+            "calendarId": "primary",
+            "timeMin": now.isoformat(),
+            "timeMax": end.isoformat(),
+            "maxResults": max_results,
+            "singleEvents": True,
+            "orderBy": "startTime",
+        }
+        if query:
+            kwargs["q"] = query
+
+        result = await asyncio.to_thread(
+            lambda: service.events().list(**kwargs).execute()
+        )
+        return result.get("items", [])
+
+    @staticmethod
+    def _format_event_date(ev: dict) -> str:
+        from datetime import datetime
+        start = ev["start"].get("dateTime", ev["start"].get("date", ""))
+        if "T" in start:
+            dt = datetime.fromisoformat(start)
+            return dt.strftime("%d/%m %H:%M")
+        return start
+
     async def run(self, action: str, google_access_token: str | None = None,
                   days_ahead: int = 7, title: str = "",
                   start_datetime: str = "", end_datetime: str = "",
-                  event_query: str = "", new_title: str = "", **_) -> str:
+                  event_query: str = "", event_number: int = 0,
+                  new_title: str = "", **_) -> str:
 
         if not google_access_token:
             return (
@@ -78,44 +119,25 @@ class CalendarAgent(BaseAgent):
             return await self._create_event(service, title, start_datetime, end_datetime)
         elif action == "update":
             return await self._update_event(service, event_query or title,
-                                            new_title, start_datetime, end_datetime)
+                                            event_number, new_title,
+                                            start_datetime, end_datetime, days_ahead)
         elif action == "delete":
-            return await self._delete_event(service, event_query or title)
+            return await self._delete_event(service, event_query or title,
+                                            event_number, days_ahead)
 
         return f"Acción '{action}' no reconocida."
 
     async def _list_events(self, service, days_ahead: int) -> str:
         try:
-            import asyncio
-            from datetime import datetime, timezone, timedelta
-            now = datetime.now(timezone.utc)
-            end = now + timedelta(days=days_ahead)
-
-            result = await asyncio.to_thread(
-                lambda: service.events().list(
-                    calendarId="primary",
-                    timeMin=now.isoformat(),
-                    timeMax=end.isoformat(),
-                    maxResults=15,
-                    singleEvents=True,
-                    orderBy="startTime",
-                ).execute()
-            )
-
-            events = result.get("items", [])
+            events = await self._fetch_events(service, days_ahead)
             if not events:
                 return f"No hay eventos en los próximos {days_ahead} días."
 
             lines = []
-            for ev in events:
-                start = ev["start"].get("dateTime", ev["start"].get("date", ""))
+            for i, ev in enumerate(events, 1):
                 summary = ev.get("summary", "Sin título")
-                if "T" in start:
-                    dt = datetime.fromisoformat(start)
-                    label = dt.strftime("%d/%m %H:%M")
-                else:
-                    label = start
-                lines.append(f"- {label}: {summary}")
+                label = self._format_event_date(ev)
+                lines.append(f"{i}. {label} — {summary}")
 
             return f"Eventos próximos ({days_ahead} días):\n" + "\n".join(lines)
 
@@ -146,36 +168,43 @@ class CalendarAgent(BaseAgent):
         except Exception as e:
             return f"Error creando evento: {e}"
 
-    async def _update_event(self, service, query: str,
-                            new_title: str, new_start: str, new_end: str) -> str:
-        if not query:
-            return "Necesito el nombre del evento a modificar."
+    async def _resolve_event(self, service, query: str, event_number: int,
+                             days_ahead: int) -> dict | str:
+        """Encuentra un evento por número de lista o por búsqueda de texto."""
+        try:
+            if event_number > 0:
+                # Re-listar eventos y tomar el índice
+                events = await self._fetch_events(service, days_ahead)
+                if not events:
+                    return "No hay eventos en el calendario."
+                if event_number > len(events):
+                    return f"Solo hay {len(events)} evento(s). Elige un número del 1 al {len(events)}."
+                return events[event_number - 1]
+            elif query:
+                events = await self._fetch_events(service, days_ahead=30, query=query)
+                if not events:
+                    return f"No encontré eventos que coincidan con '{query}'."
+                return events[0]
+            else:
+                return "Necesito el número del evento o su nombre."
+        except Exception as e:
+            return f"Error buscando evento: {e}"
+
+    async def _update_event(self, service, query: str, event_number: int,
+                            new_title: str, new_start: str, new_end: str,
+                            days_ahead: int) -> str:
         if not new_title and not new_start:
             return "Necesito saber qué cambiar: nuevo título, nueva fecha o ambos."
+
+        result = await self._resolve_event(service, query, event_number, days_ahead)
+        if isinstance(result, str):
+            return result
+
+        ev = result
         try:
             import asyncio
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime, timedelta
 
-            now = datetime.now(timezone.utc)
-            end = now + timedelta(days=30)
-
-            result = await asyncio.to_thread(
-                lambda: service.events().list(
-                    calendarId="primary",
-                    timeMin=now.isoformat(),
-                    timeMax=end.isoformat(),
-                    q=query,
-                    maxResults=5,
-                    singleEvents=True,
-                    orderBy="startTime",
-                ).execute()
-            )
-
-            events = result.get("items", [])
-            if not events:
-                return f"No encontré eventos que coincidan con '{query}'."
-
-            ev = events[0]
             ev_id = ev["id"]
             old_summary = ev.get("summary", "Sin título")
             changes = []
@@ -187,10 +216,7 @@ class CalendarAgent(BaseAgent):
             if new_start:
                 start_dt = datetime.fromisoformat(new_start)
                 ev["start"] = {"dateTime": start_dt.isoformat(), "timeZone": "America/Bogota"}
-                if new_end:
-                    end_dt = datetime.fromisoformat(new_end)
-                else:
-                    end_dt = start_dt + timedelta(hours=1)
+                end_dt = datetime.fromisoformat(new_end) if new_end else start_dt + timedelta(hours=1)
                 ev["end"] = {"dateTime": end_dt.isoformat(), "timeZone": "America/Bogota"}
                 changes.append(f"fecha → {start_dt.strftime('%d/%m/%Y a las %H:%M')}")
 
@@ -205,48 +231,23 @@ class CalendarAgent(BaseAgent):
         except Exception as e:
             return f"Error actualizando evento: {e}"
 
-    async def _delete_event(self, service, query: str) -> str:
-        if not query:
-            return "Necesito el nombre del evento a eliminar."
+    async def _delete_event(self, service, query: str, event_number: int,
+                            days_ahead: int) -> str:
+        result = await self._resolve_event(service, query, event_number, days_ahead)
+        if isinstance(result, str):
+            return result
+
+        ev = result
         try:
             import asyncio
-            from datetime import datetime, timezone, timedelta
 
-            # Buscar eventos próximos que coincidan
-            now = datetime.now(timezone.utc)
-            end = now + timedelta(days=30)
-
-            result = await asyncio.to_thread(
-                lambda: service.events().list(
-                    calendarId="primary",
-                    timeMin=now.isoformat(),
-                    timeMax=end.isoformat(),
-                    q=query,
-                    maxResults=5,
-                    singleEvents=True,
-                    orderBy="startTime",
-                ).execute()
-            )
-
-            events = result.get("items", [])
-            if not events:
-                return f"No encontré eventos que coincidan con '{query}'."
-
-            # Eliminar el primer evento que coincida
-            ev = events[0]
             ev_id = ev["id"]
             summary = ev.get("summary", "Sin título")
-            start = ev["start"].get("dateTime", ev["start"].get("date", ""))
+            label = self._format_event_date(ev)
 
             await asyncio.to_thread(
                 lambda: service.events().delete(calendarId="primary", eventId=ev_id).execute()
             )
-
-            if "T" in start:
-                dt = datetime.fromisoformat(start)
-                label = dt.strftime("%d/%m/%Y a las %H:%M")
-            else:
-                label = start
 
             return f"Evento eliminado: '{summary}' del {label}."
 
