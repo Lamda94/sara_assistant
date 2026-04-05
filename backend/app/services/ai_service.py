@@ -339,6 +339,32 @@ async def _parse_reminder(message: str) -> tuple[str, datetime] | None:
 
 # ── Helpers para tool calling y logging ──────────────────────────────────────
 
+_MAX_HISTORY_TURNS = 10  # últimos N turnos (user+assistant = 1 turno)
+
+
+async def _get_recent_history(session_id: str) -> list[dict]:
+    """Obtiene los últimos mensajes de la conversación para dar contexto al LLM."""
+    from sqlalchemy import select
+    from app.db.postgres import SessionLocal
+    from app.models.conversation import Message
+
+    try:
+        async with SessionLocal() as s:
+            r = await s.execute(
+                select(Message.role, Message.content)
+                .where(Message.session_id == session_id)
+                .order_by(Message.created_at.desc())
+                .limit(_MAX_HISTORY_TURNS * 2)
+            )
+            rows = r.all()
+    except Exception:
+        return []
+
+    # Revertir a orden cronológico (más viejo primero)
+    rows = list(reversed(rows))
+    return [{"role": row.role, "content": row.content} for row in rows]
+
+
 async def _log_message(session_id: str, device: str, role: str,
                        content: str, agent_used: str | None = None) -> None:
     """Guarda un mensaje en la tabla messages (fire-and-forget)."""
@@ -421,8 +447,12 @@ async def chat(message: str, session_id: str, device: str = "cli",
         asyncio.create_task(_log_message(session_id, device, "assistant", answer, agent_used=reminder_intent))
         return {"response": answer, "agent_used": reminder_intent}
 
-    # ── 2. Build system prompt (profile + memory + KG + morning) ──────
-    profile_text = await get_profile(session_id)
+    # ── 2. Build system prompt (profile + memory + KG + morning + history) ──
+    # Cargar historial en paralelo con el profile
+    profile_text, history = await asyncio.gather(
+        get_profile(session_id),
+        _get_recent_history(session_id),
+    )
     profile_context = f"\n\n[Perfil del usuario]\n{profile_text}" if profile_text else ""
 
     morning_context = ""
@@ -456,10 +486,9 @@ async def chat(message: str, session_id: str, device: str = "cli",
     system = base_system + profile_context + morning_context + memory_context + calendar_hint
 
     # ── 3. Primera llamada LLM con tool schemas ──────────────────────
-    msgs = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": message},
-    ]
+    msgs = [{"role": "system", "content": system}]
+    msgs.extend(history)
+    msgs.append({"role": "user", "content": message})
     tool_call_failed = False
     try:
         response = await groq_client.chat.completions.create(
