@@ -281,6 +281,96 @@ app.post('/configure', (req, res) => {
   }
 });
 
+// ── POST /optimize-profile ──────────────────────────────────────────
+
+app.post('/optimize-profile', async (req, res) => {
+  try {
+    const cv = readFileOrNull(resolve(CAREER_OPS, 'cv.md')) || '';
+    const profile = readFileOrNull(resolve(CAREER_OPS, 'config/profile.yml')) || '';
+
+    if (!cv && !req.body?.cv_markdown) {
+      return res.status(400).json({ error: 'No CV found. Upload CV first.' });
+    }
+
+    const cvText = req.body?.cv_markdown || cv;
+    const targetRoles = req.body?.target_roles || [];
+
+    const raw = await groqChat(
+      `Eres un experto en búsqueda de empleo y reclutamiento tech. Analiza el CV y genera:
+
+1. **title_positive**: Lista de 30+ keywords que los títulos de ofertas de empleo relevantes contendrían. Incluye variaciones en inglés Y español. Piensa en: tecnologías del CV, roles equivalentes, seniority levels, variaciones de títulos (ej: "Developer" y "Desarrollador", "Engineer" y "Ingeniero", "Lead" y "Líder"). Sé exhaustivo.
+
+2. **title_negative**: Keywords para EXCLUIR (roles que no encajan, como Junior si es Senior, o tecnologías que no maneja).
+
+3. **companies**: Lista de 30+ empresas tech que contratan estos perfiles y usan Greenhouse, Ashby o Lever como ATS. Incluye la URL exacta de su portal de careers. Incluye empresas de LATAM, USA remote-friendly, y Europa remote. Formato: nombre | url_careers | ats_provider
+
+Responde SOLO en JSON:
+{
+  "title_positive": ["keyword1", "keyword2", ...],
+  "title_negative": ["keyword1", ...],
+  "companies": [
+    {"name": "Company", "careers_url": "https://...", "ats": "greenhouse"},
+    ...
+  ]
+}`,
+      `CV:\n${cvText}\n\nRoles objetivo: ${targetRoles.join(', ') || 'No especificados'}`
+    );
+
+    let parsed;
+    try {
+      let text = raw.trim();
+      if (text.startsWith('```')) text = text.split('\n', 2)[1];
+      if (text.endsWith('```')) text = text.slice(0, text.lastIndexOf('```'));
+      parsed = JSON.parse(text.trim());
+    } catch {
+      return res.status(500).json({ error: 'Failed to parse LLM response', raw });
+    }
+
+    // Actualizar portals.yml con los nuevos keywords
+    const positiveLines = (parsed.title_positive || []).map(k => `    - "${k}"`).join('\n');
+    const negativeLines = (parsed.title_negative || []).map(k => `    - "${k}"`).join('\n');
+
+    const companiesYaml = (parsed.companies || []).map(c => `
+  - name: "${c.name}"
+    careers_url: "${c.careers_url}"
+    enabled: true`).join('\n');
+
+    const newPortals = `# Career-Ops Portal Config — Auto-generated from profile
+# Updated: ${new Date().toISOString()}
+
+title_filter:
+  positive:
+${positiveLines}
+  negative:
+${negativeLines}
+
+  seniority_boost:
+    - "Senior"
+    - "Staff"
+    - "Principal"
+    - "Lead"
+    - "Head"
+    - "Director"
+    - "Manager"
+
+tracked_companies:
+${companiesYaml}
+`;
+
+    writeFileSync(resolve(CAREER_OPS, 'portals.yml'), newPortals, 'utf-8');
+
+    res.json({
+      success: true,
+      title_positive: parsed.title_positive,
+      title_negative: parsed.title_negative,
+      companies_count: (parsed.companies || []).length,
+      companies: parsed.companies,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Start ───────────────────────────────────────────────────────────
 
 app.listen(PORT, '0.0.0.0', () => {

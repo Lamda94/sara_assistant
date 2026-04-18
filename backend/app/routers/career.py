@@ -197,6 +197,37 @@ async def save_profile(request: Request, body: ProfileBody, session_id: str = ""
 
         await s.commit()
 
+    # Sincronizar CV al contenedor y optimizar keywords
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            await client.post("http://sara_career:4000/configure", json={
+                "cv_markdown": body.cv_markdown or "",
+            })
+    except Exception:
+        pass
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post("http://sara_career:4000/optimize-profile", json={
+                "cv_markdown": body.cv_markdown or "",
+                "target_roles": body.target_roles or [],
+            })
+            if r.status_code == 200:
+                opt = r.json()
+                # Actualizar keywords en el perfil con los optimizados
+                async with SessionLocal() as s:
+                    p = (await s.execute(
+                        select(CareerProfile).where(CareerProfile.session_id == session_id)
+                    )).scalar_one_or_none()
+                    if p and opt.get("title_positive"):
+                        p.title_positive = opt["title_positive"]
+                    if p and opt.get("title_negative"):
+                        p.title_negative = opt["title_negative"]
+                    await s.commit()
+    except Exception:
+        pass
+
     return {"ok": True}
 
 
