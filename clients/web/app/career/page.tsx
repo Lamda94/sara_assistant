@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Briefcase, Search, FileText, TrendingUp, ChevronDown, ChevronUp, Power } from "lucide-react";
+import { Briefcase, Search, FileText, TrendingUp, ChevronDown, ChevronUp, Power, Settings } from "lucide-react";
+import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 
 const BASE = "/api";
@@ -89,9 +90,18 @@ export default function CareerPage() {
             {mode ? "Activo" : "Inactivo"}
           </span>
         </div>
-        <p style={{ fontSize: 13, color: "#546E7A", margin: "0 0 32px" }}>
-          Busqueda de empleo autonoma
-        </p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32 }}>
+          <p style={{ fontSize: 13, color: "#546E7A", margin: 0 }}>
+            Busqueda de empleo autonoma
+          </p>
+          <Link href="/career/setup" style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "8px 16px",
+            borderRadius: 8, background: "#263238", border: "1px solid #455A64",
+            color: "#ECEFF1", fontSize: 12, textDecoration: "none", fontWeight: 500,
+          }}>
+            <Settings size={14} /> Configurar
+          </Link>
+        </div>
 
         {/* Metrics */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 32 }}>
