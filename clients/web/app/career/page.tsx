@@ -8,6 +8,15 @@ import Sidebar from "@/components/Sidebar";
 const BASE = "/api";
 const SESSION_ID = "lamda94-web";
 
+interface ScanResult {
+  id: number;
+  company: string;
+  title: string;
+  url: string;
+  portal_source: string | null;
+  first_seen_at: string | null;
+}
+
 interface Application {
   id: string;
   company: string;
@@ -36,19 +45,23 @@ interface Status {
 export default function CareerPage() {
   const { status: authStatus } = useSession();
   const [apps, setApps] = useState<Application[]>([]);
+  const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [careerStatus, setCareerStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"found" | "evaluated">("found");
 
   const load = async () => {
     setLoading(true);
     try {
-      const [sRes, aRes] = await Promise.all([
+      const [sRes, aRes, srRes] = await Promise.all([
         fetch(`${BASE}/career/status?session_id=${SESSION_ID}`),
         fetch(`${BASE}/career/applications?limit=20`),
+        fetch(`${BASE}/career/scan-results?limit=30`),
       ]);
       if (sRes.ok) setCareerStatus(await sRes.json());
       if (aRes.ok) setApps(await aRes.json());
+      if (srRes.ok) setScanResults(await srRes.json());
     } finally {
       setLoading(false);
     }
@@ -147,12 +160,57 @@ export default function CareerPage() {
           </div>
         )}
 
-        {/* Applications */}
-        <h2 style={{ fontSize: 14, fontWeight: 600, color: "#78909C", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Evaluaciones
-        </h2>
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          {(["found", "evaluated"] as const).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              padding: "8px 18px", borderRadius: 9, cursor: "pointer",
+              border: "1px solid", fontSize: 13,
+              borderColor: activeTab === t ? "#455A64" : "rgba(255,255,255,0.06)",
+              background: activeTab === t ? "#263238" : "transparent",
+              color: activeTab === t ? "#ECEFF1" : "#546E7A",
+            }}>
+              {t === "found" ? `Encontradas (${scanResults.length})` : `Evaluadas (${apps.length})`}
+            </button>
+          ))}
+        </div>
 
-        {apps.length === 0 ? (
+        {/* Scan Results */}
+        {activeTab === "found" && (
+          scanResults.length === 0 ? (
+            <div style={{ color: "#37474F", fontSize: 13, padding: "32px 0" }}>
+              No hay ofertas encontradas. Dile a SARA: "escanea portales"
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {scanResults.map(sr => (
+                <div key={sr.id} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "12px 20px", borderRadius: 10, background: "#1E2225",
+                  border: "1px solid rgba(255,255,255,0.05)",
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: 14, color: "#ECEFF1", fontWeight: 500 }}>
+                      {sr.company} — {sr.title}
+                    </p>
+                    <p style={{ margin: "3px 0 0", fontSize: 11, color: "#546E7A" }}>
+                      {sr.first_seen_at && new Date(sr.first_seen_at).toLocaleDateString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                  {sr.url && (
+                    <a href={sr.url} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: 11, color: "#42A5F5", textDecoration: "none", flexShrink: 0, marginLeft: 12 }}>
+                      Ver oferta →
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Applications */}
+        {activeTab === "evaluated" && (apps.length === 0 ? (
           <div style={{ color: "#37474F", fontSize: 13, padding: "32px 0" }}>
             No hay evaluaciones. Dile a SARA: "evalua esta oferta: [url]"
           </div>
@@ -285,7 +343,7 @@ export default function CareerPage() {
               );
             })}
           </div>
-        )}
+        ))}
       </div>
     </div>
   );

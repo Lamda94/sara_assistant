@@ -81,6 +81,33 @@ async def get_applications(request: Request, limit: int = 20):
     ]
 
 
+@router.get("/scan-results")
+@limiter.limit("30/minute")
+async def get_scan_results(request: Request, limit: int = 30):
+    """Últimas ofertas encontradas por el scanner."""
+    from app.models.career import CareerScanHistory
+    async with SessionLocal() as s:
+        r = await s.execute(
+            select(CareerScanHistory)
+            .where(CareerScanHistory.status == "added")
+            .order_by(CareerScanHistory.first_seen_at.desc())
+            .limit(limit)
+        )
+        results = r.scalars().all()
+
+    return [
+        {
+            "id": r.id,
+            "company": r.company,
+            "title": r.title,
+            "url": r.url,
+            "portal_source": r.portal_source,
+            "first_seen_at": r.first_seen_at.isoformat() if r.first_seen_at else None,
+        }
+        for r in results
+    ]
+
+
 @router.get("/activity")
 @limiter.limit("30/minute")
 async def get_activity(request: Request, limit: int = 10):
