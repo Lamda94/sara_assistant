@@ -302,13 +302,7 @@ app.post('/optimize-profile', async (req, res) => {
 
 2. **title_negative**: Keywords para EXCLUIR (roles que no encajan, como Junior si es Senior, o tecnologías que no maneja).
 
-3. **companies**: Lista de 30+ empresas tech que contratan estos perfiles. IMPORTANTE: SOLO incluye empresas cuya página de careers esté en uno de estos dominios EXACTOS:
-   - Greenhouse: URL contiene "boards.greenhouse.io" o "job-boards.greenhouse.io"
-   - Ashby: URL contiene "jobs.ashbyhq.com"
-   - Lever: URL contiene "jobs.lever.co"
-   NO incluyas empresas con portales propios (careers.google.com, amazon.jobs, etc.) porque el scanner NO puede leerlos.
-   Ejemplos correctos: {"name":"Stripe","careers_url":"https://jobs.lever.co/stripe","ats":"lever"}, {"name":"Figma","careers_url":"https://boards.greenhouse.io/figma","ats":"greenhouse"}
-   Incluye empresas de LATAM, USA remote-friendly, y Europa remote que usen estos ATS.
+3. **companies**: NO generes empresas. Responde con un array vacío []. Las empresas ya están preconfiguradas.
 
 Responde SOLO en JSON:
 {
@@ -339,38 +333,25 @@ Responde SOLO en JSON:
       return res.status(500).json({ error: 'Failed to parse LLM response', raw });
     }
 
-    // Actualizar portals.yml con los nuevos keywords
+    // Actualizar SOLO los keywords en portals.yml existente, preservar empresas
+    const portalsContent = readFileOrNull(resolve(CAREER_OPS, 'portals.yml')) || '';
+
     const positiveLines = (parsed.title_positive || []).map(k => `    - "${k}"`).join('\n');
     const negativeLines = (parsed.title_negative || []).map(k => `    - "${k}"`).join('\n');
 
-    const companiesYaml = (parsed.companies || []).map(c => `
-  - name: "${c.name}"
-    careers_url: "${c.careers_url}"
-    enabled: true`).join('\n');
+    let updated = portalsContent;
+    // Reemplazar sección positive
+    updated = updated.replace(
+      /  positive:\n([\s\S]*?)(?=\n  negative:)/,
+      `  positive:\n${positiveLines}\n`
+    );
+    // Reemplazar sección negative (hasta seniority_boost o search_queries)
+    updated = updated.replace(
+      /  negative:\n([\s\S]*?)(?=\n  seniority_boost:|\n\nsearch_queries:|\ntracked_companies:)/,
+      `  negative:\n${negativeLines}\n`
+    );
 
-    const newPortals = `# Career-Ops Portal Config — Auto-generated from profile
-# Updated: ${new Date().toISOString()}
-
-title_filter:
-  positive:
-${positiveLines}
-  negative:
-${negativeLines}
-
-  seniority_boost:
-    - "Senior"
-    - "Staff"
-    - "Principal"
-    - "Lead"
-    - "Head"
-    - "Director"
-    - "Manager"
-
-tracked_companies:
-${companiesYaml}
-`;
-
-    writeFileSync(resolve(CAREER_OPS, 'portals.yml'), newPortals, 'utf-8');
+    writeFileSync(resolve(CAREER_OPS, 'portals.yml'), updated, 'utf-8');
 
     res.json({
       success: true,
