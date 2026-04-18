@@ -126,6 +126,33 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  PopupMenuItem<String> _menuItem(String value, IconData icon, String label) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: SaraColors.secondary),
+          const SizedBox(width: 10),
+          Text(label, style: const TextStyle(fontSize: 13, color: SaraColors.primary)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    await AuthService().signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => LoginScreen(
+        onSignedIn: () => Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const ChatScreen()),
+          (_) => false,
+        ),
+      )),
+      (_) => false,
+    );
+  }
+
   Future<void> _speak(String text) async {
     if (!_voiceEnabled) return;
     await _player.stop();
@@ -334,54 +361,31 @@ class _ChatScreenState extends State<ChatScreen> {
               if (!_voiceEnabled) { _player.stop(); _tts.stop(); }
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.psychology_outlined, size: 20),
-            color: SaraColors.secondary,
-            onPressed: () => Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const MemoryScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.trending_up, size: 20),
-            color: SaraColors.secondary,
-            tooltip: 'SABE',
-            onPressed: () => Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const BettingScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.work_outline, size: 20),
-            color: SaraColors.secondary,
-            tooltip: 'CareerOps',
-            onPressed: () => Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const CareerScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.shield_outlined, size: 20),
-            color: SaraColors.dim,
-            tooltip: 'Control parental',
-            onPressed: () => Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const MonitoringSetupScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, size: 20),
-            color: SaraColors.dim,
-            tooltip: 'Cerrar sesión',
-            onPressed: () async {
-              await AuthService().signOut();
-              if (!mounted) return;
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => LoginScreen(
-                  onSignedIn: () => Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const ChatScreen()),
-                    (_) => false,
-                  ),
-                )),
-                (_) => false,
-              );
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.apps, size: 20, color: SaraColors.secondary),
+            color: SaraColors.surface,
+            onSelected: (value) {
+              switch (value) {
+                case 'memory':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MemoryScreen()));
+                case 'sabe':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const BettingScreen()));
+                case 'career':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CareerScreen()));
+                case 'parental':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MonitoringSetupScreen()));
+                case 'logout':
+                  _handleLogout();
+              }
             },
+            itemBuilder: (context) => [
+              _menuItem('memory', Icons.psychology_outlined, 'Memoria'),
+              _menuItem('sabe', Icons.trending_up, 'SABE'),
+              _menuItem('career', Icons.work_outline, 'CareerOps'),
+              _menuItem('parental', Icons.shield_outlined, 'Control parental'),
+              const PopupMenuDivider(),
+              _menuItem('logout', Icons.logout, 'Cerrar sesion'),
+            ],
           ),
         ],
         bottom: PreferredSize(
