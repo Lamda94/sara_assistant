@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Career-ops
 WORKDIR /career-ops
-COPY career-ops/package.json career-ops/package-lock.json* ./
-RUN npm ci --prefer-offline
+COPY career-ops/package.json ./
+RUN npm install --prefer-offline
 COPY career-ops/ .
 RUN npx playwright install chromium
 
@@ -19,8 +19,8 @@ RUN mkdir -p data output reports jds interview-prep batch/tracker-additions
 
 # API wrapper
 WORKDIR /career-api
-COPY career-api/package.json career-api/package-lock.json* ./
-RUN npm ci --prefer-offline
+COPY career-api/package.json ./
+RUN npm install --prefer-offline
 COPY career-api/ .
 
 EXPOSE 4000
