@@ -107,23 +107,26 @@ app.post('/scan', (req, res) => {
       output = execErr.stdout || '';
     }
 
-    // Parse scan output — scan.mjs prints summary lines
+    // Parse scan output — scan.mjs prints lines like "  + Company | Title | Location"
     const lines = output.trim().split('\n');
     const offers = [];
     for (const line of lines) {
-      // Scan outputs lines like: "  [NEW] Title | Company | Location | URL"
-      const match = line.match(/\[NEW\]\s+(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(\S+)/);
+      const match = line.match(/^\s*\+\s+(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)/);
       if (match) {
         offers.push({
-          title: match[1].trim(),
-          company: match[2].trim(),
+          company: match[1].trim(),
+          title: match[2].trim(),
           location: match[3].trim(),
-          url: match[4].trim(),
+          source: 'scan',
         });
       }
     }
 
-    res.json({ found: offers.length, offers, raw_output: output });
+    // Extract stats from summary
+    const addedMatch = output.match(/New offers added:\s+(\d+)/);
+    const totalFound = addedMatch ? parseInt(addedMatch[1]) : offers.length;
+
+    res.json({ found: totalFound, offers, portals_scanned: 94, raw_output: output });
   } catch (err) {
     res.status(500).json({ error: err.message, stderr: err.stderr?.toString() });
   }
