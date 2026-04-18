@@ -302,7 +302,13 @@ app.post('/optimize-profile', async (req, res) => {
 
 2. **title_negative**: Keywords para EXCLUIR (roles que no encajan, como Junior si es Senior, o tecnologías que no maneja).
 
-3. **companies**: Lista de 30+ empresas tech que contratan estos perfiles y usan Greenhouse, Ashby o Lever como ATS. Incluye la URL exacta de su portal de careers. Incluye empresas de LATAM, USA remote-friendly, y Europa remote. Formato: nombre | url_careers | ats_provider
+3. **companies**: Lista de 30+ empresas tech que contratan estos perfiles. IMPORTANTE: SOLO incluye empresas cuya página de careers esté en uno de estos dominios EXACTOS:
+   - Greenhouse: URL contiene "boards.greenhouse.io" o "job-boards.greenhouse.io"
+   - Ashby: URL contiene "jobs.ashbyhq.com"
+   - Lever: URL contiene "jobs.lever.co"
+   NO incluyas empresas con portales propios (careers.google.com, amazon.jobs, etc.) porque el scanner NO puede leerlos.
+   Ejemplos correctos: {"name":"Stripe","careers_url":"https://jobs.lever.co/stripe","ats":"lever"}, {"name":"Figma","careers_url":"https://boards.greenhouse.io/figma","ats":"greenhouse"}
+   Incluye empresas de LATAM, USA remote-friendly, y Europa remote que usen estos ATS.
 
 Responde SOLO en JSON:
 {
