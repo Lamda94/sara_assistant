@@ -14,11 +14,12 @@ import app.models.consolidation_log    # noqa: F401
 import app.models.conversation         # noqa: F401
 import app.models.proactive_insight    # noqa: F401
 import app.models.betting              # noqa: F401
+import app.models.career               # noqa: F401
 from app.services.memory_service import init_collection
 from app.services.knowledge_service import init_kg_collection
 from app.services.notification_service import start_scheduler
 from app.routers import chat, memory, agents, knowledge
-from app.routers import notifications, voice, monitoring, auth_web, betting
+from app.routers import notifications, voice, monitoring, auth_web, betting, career
 from app.config import settings
 from app.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
@@ -118,6 +119,7 @@ app.include_router(voice.router)
 app.include_router(monitoring.router)
 app.include_router(auth_web.router)
 app.include_router(betting.router)
+app.include_router(career.router)
 
 
 @app.get("/health")

@@ -1,0 +1,15 @@
+{
+  "name": "career-api",
+  "version": "1.0.0",
+  "description": "Express API wrapper for career-ops scripts",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

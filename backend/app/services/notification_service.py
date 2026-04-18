@@ -213,6 +213,16 @@ def start_scheduler():
         replace_existing=True,
     )
 
+    # CareerOps — Escaneo automático (cada 6h, solo si modo activo)
+    from app.services.career_service import career_auto_scan
+    scheduler.add_job(
+        career_auto_scan,
+        trigger="interval",
+        hours=6,
+        id="career_auto_scan",
+        replace_existing=True,
+    )
+
     # SABE — Daily briefing (8:00 AM)
     from app.services.betting_service import sabe_daily_briefing
     scheduler.add_job(
@@ -225,6 +235,6 @@ def start_scheduler():
     scheduler.start()
     logger.info(
         f"Scheduler iniciado: recordatorios (30s) + proactividad ({cfg.proactive_check_interval_hours}h) "
-        f"+ consolidación (3am) + SABE resolver (2h) + SABE training (3h) + SABE briefing (8am)"
+        f"+ consolidación (3am) + SABE resolver (2h) + SABE training (3h) + SABE briefing (8am) + CareerOps (6h)"
     )
     return scheduler

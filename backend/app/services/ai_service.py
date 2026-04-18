@@ -25,6 +25,7 @@ Capacidades:
 - Puedes generar código en cualquier lenguaje.
 - Para operar con Google Calendar (ver, crear, actualizar, eliminar eventos), USA la herramienta 'calendar'.
 - Tienes un agente de análisis deportivo llamado SABE (betting). Cuando el usuario pregunte sobre apuestas, predicciones deportivas, cuotas, value bets o análisis de partidos, USA la herramienta 'betting'.
+- Tienes un agente de búsqueda de empleo CareerOps (career). Cuando el usuario hable sobre buscar empleo, evaluar ofertas, generar CV, escanear portales o preparar entrevistas, USA la herramienta 'career'.
 
 Comportamiento:
 - Responde siempre en el idioma del usuario.
@@ -32,6 +33,7 @@ Comportamiento:
 - Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" ni "no tengo permisos" — usa las herramientas disponibles.
 - Cuando el usuario pida algo sobre eventos o calendario, USA la herramienta calendar. No respondas sin usarla.
 - Cuando el usuario pregunte sobre apuestas deportivas o análisis de partidos, USA la herramienta betting.
+- Cuando el usuario hable sobre empleo, ofertas de trabajo, CV o entrevistas, USA la herramienta career.
 - Cuando el contexto de acción muestre un resultado, preséntalo de forma clara. Si no hay resultado, no inventes uno.\
 """
 
@@ -47,6 +49,7 @@ Capacidades:
 - Puedes generar código en cualquier lenguaje.
 - Para operar con Google Calendar (ver, crear, actualizar, eliminar eventos), USA la herramienta 'calendar'.
 - Tienes un agente de análisis deportivo llamado SABE (betting). Cuando el usuario pregunte sobre apuestas, predicciones deportivas, cuotas, value bets o análisis de partidos, USA la herramienta 'betting'.
+- Tienes un agente de búsqueda de empleo CareerOps (career). Cuando el usuario hable sobre buscar empleo, evaluar ofertas, generar CV, escanear portales o preparar entrevistas, USA la herramienta 'career'.
 
 Comportamiento:
 - Responde siempre en el idioma del usuario.
@@ -54,6 +57,7 @@ Comportamiento:
 - Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" ni "no tengo permisos" — usa las herramientas disponibles.
 - Cuando el usuario pida algo sobre eventos o calendario, USA la herramienta calendar. No respondas sin usarla.
 - Cuando el usuario pregunte sobre apuestas deportivas o análisis de partidos, USA la herramienta betting.
+- Cuando el usuario hable sobre empleo, ofertas de trabajo, CV o entrevistas, USA la herramienta career.
 - Cuando el contexto de acción muestre un resultado, preséntalo de forma clara. Si no hay resultado, no inventes uno.\
 """
 
@@ -418,6 +422,8 @@ async def _dispatch_tool_call(
     if tool_name == "set_reminder":
         tool_args["session_id"] = session_id
     if tool_name == "betting":
+        tool_args["session_id"] = session_id
+    if tool_name == "career":
         tool_args["session_id"] = session_id
 
     try:

@@ -5,6 +5,7 @@ from .email_agent import EmailAgent
 from .code_agent import CodeAgent
 from .file_agent import FileAgent
 from .betting_agent import BettingAgent
+from .career_agent import CareerAgent
 
 AGENTS = [
     WebSearchAgent(),
@@ -14,6 +15,7 @@ AGENTS = [
     CodeAgent(),
     FileAgent(),
     BettingAgent(),
+    CareerAgent(),
 ]
 
 # Lookup por nombre para dispatch rápido

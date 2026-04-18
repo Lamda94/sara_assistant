@@ -106,6 +106,25 @@ services:
         limits:
           memory: 512m
 
+  career:
+    build:
+      context: ./career-ops-container
+    image: sara_career:latest
+    container_name: sara_career
+    env_file: .env.prod
+    environment:
+      GROQ_MODEL: llama-3.3-70b-versatile
+    volumes:
+      - career_output:/career-ops/output
+      - career_data:/career-ops/data
+    restart: unless-stopped
+    networks:
+      - sara_net
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
   nginx:
     image: nginx:alpine
     container_name: sara_nginx
@@ -132,3 +151,5 @@ volumes:
   qdrant_data:
   ollama_data:
   whisper_cache:
+  career_output:
+  career_data:
