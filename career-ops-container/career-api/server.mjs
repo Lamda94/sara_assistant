@@ -107,24 +107,24 @@ app.post('/scan', (req, res) => {
       output = execErr.stdout || '';
     }
 
-    // Parse scan output — scan.mjs prints lines like "  + Company | Title | Location"
-    const lines = output.trim().split('\n');
-    const offers = [];
-    for (const line of lines) {
-      const match = line.match(/^\s*\+\s+(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)/);
-      if (match) {
-        offers.push({
-          company: match[1].trim(),
-          title: match[2].trim(),
-          location: match[3].trim(),
-          source: 'scan',
-        });
-      }
-    }
-
     // Extract stats from summary
     const addedMatch = output.match(/New offers added:\s+(\d+)/);
-    const totalFound = addedMatch ? parseInt(addedMatch[1]) : offers.length;
+    const totalFound = addedMatch ? parseInt(addedMatch[1]) : 0;
+
+    // Read offers from scan-history.tsv (has URLs)
+    const historyPath = resolve(CAREER_OPS, 'data/scan-history.tsv');
+    const today = new Date().toISOString().slice(0, 10);
+    const offers = [];
+
+    if (existsSync(historyPath)) {
+      const tsv = readFileSync(historyPath, 'utf-8').split('\n').slice(1); // skip header
+      for (const line of tsv) {
+        const [url, date, portal, title, company, status] = line.split('\t');
+        if (date === today && status === 'added' && url) {
+          offers.push({ url, company: company || '', title: title || '', location: '', source: portal || 'scan' });
+        }
+      }
+    }
 
     res.json({ found: totalFound, offers, portals_scanned: 94, raw_output: output });
   } catch (err) {
@@ -136,20 +136,34 @@ app.post('/scan', (req, res) => {
 
 app.post('/evaluate', async (req, res) => {
   try {
-    const { url, jd_text } = req.body || {};
-    if (!url && !jd_text) {
-      return res.status(400).json({ error: 'Provide url or jd_text' });
+    const { url, jd_text, company, title } = req.body || {};
+    if (!url && !jd_text && !title) {
+      return res.status(400).json({ error: 'Provide url, jd_text, or company+title' });
     }
 
     let jd = jd_text || '';
     if (url && !jd) {
-      jd = await fetchUrlContent(url);
+      try {
+        jd = await fetchUrlContent(url);
+      } catch {
+        // URL fetch failed — use title+company as fallback
+        jd = '';
+      }
+    }
+
+    // Build evaluation context
+    let evalContext = '';
+    if (url) evalContext += `URL: ${url}\n`;
+    if (company) evalContext += `Company: ${company}\n`;
+    if (title) evalContext += `Role: ${title}\n`;
+    if (jd) evalContext += `\nJob Description:\n${jd}`;
+
+    if (!evalContext.trim()) {
+      return res.status(400).json({ error: 'Not enough information to evaluate' });
     }
 
     const systemPrompt = buildSystemPrompt('modes/oferta.md');
-    const userMsg = url
-      ? `Evaluate this offer:\n\nURL: ${url}\n\n${jd}`
-      : `Evaluate this offer:\n\n${jd}`;
+    const userMsg = `Evaluate this offer:\n\n${evalContext}`;
 
     const raw = await groqChat(systemPrompt, userMsg);
 

@@ -95,17 +95,29 @@ async def _run_cycle(profile: CareerProfile):
     top_company = ""
     top_role = ""
 
-    for offer in offers:
+    # Limitar evaluaciones automáticas a las primeras 10 por ciclo
+    eval_candidates = [o for o in offers if o.get("url")][:10]
+
+    for offer in eval_candidates:
         try:
             # Evaluar
             async with httpx.AsyncClient(timeout=180) as client:
                 r = await client.post(f"{_CAREER_URL}/evaluate", json={
                     "url": offer.get("url", ""),
+                    "company": offer.get("company", ""),
+                    "title": offer.get("title", ""),
                 })
-                r.raise_for_status()
+                if r.status_code != 200:
+                    logger.warning("[CareerOps] Evaluate retornó %d para %s", r.status_code, offer.get("title"))
+                    continue
                 eval_data = r.json()
 
-            score = eval_data.get("score", 0)
+            score = eval_data.get("score") or 0
+            if isinstance(score, str):
+                try:
+                    score = float(score)
+                except ValueError:
+                    score = 0
             evaluated += 1
 
             # Guardar aplicación
