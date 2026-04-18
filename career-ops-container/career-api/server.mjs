@@ -319,10 +319,17 @@ Responde SOLO en JSON:
     let parsed;
     try {
       let text = raw.trim();
-      if (text.startsWith('```')) text = text.split('\n', 2)[1];
-      if (text.endsWith('```')) text = text.slice(0, text.lastIndexOf('```'));
-      parsed = JSON.parse(text.trim());
-    } catch {
+      // Remove ```json ... ``` wrapper
+      const fenceStart = text.indexOf('```');
+      if (fenceStart !== -1) {
+        const afterFence = text.indexOf('\n', fenceStart);
+        const fenceEnd = text.lastIndexOf('```');
+        if (afterFence !== -1 && fenceEnd > afterFence) {
+          text = text.slice(afterFence + 1, fenceEnd).trim();
+        }
+      }
+      parsed = JSON.parse(text);
+    } catch (parseErr) {
       return res.status(500).json({ error: 'Failed to parse LLM response', raw });
     }
 
