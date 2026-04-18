@@ -183,15 +183,24 @@ class CareerAgent(BaseAgent):
 
         offers = data.get("offers", [])
         found = data.get("found", 0)
+        raw = data.get("raw_output", "")
 
-        if not offers:
-            return "No se encontraron ofertas nuevas en los portales configurados."
-
-        # Save to scan history
+        # Guardar log de actividad siempre
         from app.db.postgres import SessionLocal
-        from app.models.career import CareerScanHistory
+        from app.models.career import CareerScanHistory, CareerActivityLog
+        from datetime import datetime
 
         async with SessionLocal() as s:
+            log = CareerActivityLog(
+                session_id=session_id,
+                cycle_date=datetime.utcnow(),
+                vacancies_found=found,
+                portals_scanned=raw.count("companies") or 1,
+                vacancies_evaluated=0,
+                duration_seconds=0,
+            )
+            s.add(log)
+
             for offer in offers:
                 s.add(CareerScanHistory(
                     session_id=session_id,
@@ -202,6 +211,10 @@ class CareerAgent(BaseAgent):
                     status="added",
                 ))
             await s.commit()
+
+        if not offers:
+            scan_info = raw.strip().split("\n")[0] if raw else "Sin detalle"
+            return f"📡 **Escaneo completado** — 0 ofertas nuevas.\n\nDetalle: {scan_info}"
 
         lines = [f"📡 **Escaneo completado** — {found} ofertas nuevas encontradas\n"]
         for i, o in enumerate(offers[:10], 1):
