@@ -1,11 +1,12 @@
 """CareerRouter — Endpoints REST para las vistas de CareerOps."""
 from typing import Optional
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, UploadFile, File
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func as sqlfunc
 from app.db.postgres import SessionLocal
 from app.models.career import CareerApplication, CareerProfile, CareerActivityLog, CareerPortal
 from app.limiter import limiter
+from app.config import settings
 
 router = APIRouter(prefix="/career", tags=["career"])
 
@@ -303,3 +304,96 @@ async def delete_portal(request: Request, portal_id: int):
             await s.delete(portal)
             await s.commit()
     return {"ok": True}
+
+
+# ── CV Parser ────────────────────────────────────────────────────────
+
+_MAX_CV_BYTES = 5 * 1024 * 1024  # 5MB
+
+@router.post("/parse-cv")
+@limiter.limit("5/minute")
+async def parse_cv(request: Request, file: UploadFile = File(...)):
+    """
+    Recibe un CV (PDF o texto) y usa el LLM para extraer perfil profesional.
+    Retorna todos los campos del perfil autocompletados.
+    """
+    content = await file.read()
+    if len(content) > _MAX_CV_BYTES:
+        return {"error": "Archivo muy grande (máximo 5MB)"}
+
+    filename = (file.filename or "").lower()
+    if filename.endswith(".pdf"):
+        cv_text = _extract_pdf_text(content)
+    else:
+        cv_text = content.decode("utf-8", errors="replace")
+
+    if not cv_text or len(cv_text.strip()) < 50:
+        return {"error": "No se pudo extraer texto del archivo"}
+
+    from groq import AsyncGroq
+    groq = AsyncGroq(api_key=settings.groq_api_key)
+
+    resp = await groq.chat.completions.create(
+        model=settings.groq_model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Eres un parser de CVs profesional. Extrae la información del CV y responde "
+                    "SOLO en JSON con esta estructura exacta:\n"
+                    "{\n"
+                    '  "full_name": "nombre completo",\n'
+                    '  "email": "email o null",\n'
+                    '  "phone": "teléfono o null",\n'
+                    '  "location": "ciudad, país o null",\n'
+                    '  "linkedin_url": "url linkedin o null",\n'
+                    '  "portfolio_url": "url portfolio o null",\n'
+                    '  "github_url": "url github o null",\n'
+                    '  "target_roles": ["rol1", "rol2"] basado en experiencia reciente,\n'
+                    '  "title_positive": ["keyword1", "keyword2"] tecnologías y skills principales,\n'
+                    '  "title_negative": ["keyword1"] tecnologías que NO maneja,\n'
+                    '  "cv_markdown": "el CV completo convertido a formato Markdown limpio"\n'
+                    "}\n"
+                    "Para cv_markdown: convierte todo el contenido a Markdown bien estructurado con "
+                    "# para nombre, ## para secciones (Experiencia, Educación, Skills, etc.), "
+                    "### para cada puesto, y - para items. Mantén toda la información original."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"CV:\n\n{cv_text[:15000]}",
+            },
+        ],
+        temperature=0.2,
+        max_tokens=4096,
+    )
+
+    import json
+    try:
+        text = resp.choices[0].message.content.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        parsed = json.loads(text)
+    except Exception:
+        return {"error": "No se pudo parsear el CV", "raw": resp.choices[0].message.content}
+
+    return {"ok": True, "profile": parsed}
+
+
+def _extract_pdf_text(content: bytes) -> str:
+    """Extrae texto de un PDF."""
+    import io
+    try:
+        import pdfplumber
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            pages = [p.extract_text() or "" for p in pdf.pages[:20]]
+            return "\n\n".join(pages)
+    except ImportError:
+        pass
+    try:
+        import re
+        text = content.decode("latin-1", errors="replace")
+        parts = re.findall(r'\(([^)]+)\)', text)
+        return " ".join(parts)[:15000]
+    except Exception:
+        return ""

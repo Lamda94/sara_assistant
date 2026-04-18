@@ -21,3 +21,4 @@ edge-tts>=6.1.9
 python-multipart>=0.0.9
 imageio-ffmpeg>=0.5.1
 slowapi>=0.1.9
+pdfplumber>=0.11.0

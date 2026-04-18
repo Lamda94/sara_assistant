@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Save, Plus, Trash2, Power, ArrowLeft, Briefcase } from "lucide-react";
+import { Save, Plus, Trash2, Power, ArrowLeft, Briefcase, Upload, Loader } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 
 const BASE = "/api";
@@ -22,6 +22,7 @@ export default function CareerSetupPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [parsing, setParsing] = useState(false);
   const [careerMode, setCareerMode] = useState(false);
   const [tab, setTab] = useState<"profile" | "portals">("profile");
 
@@ -136,6 +137,37 @@ export default function CareerSetupPage() {
     }
   };
 
+  const uploadCV = async (file: File) => {
+    setParsing(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${BASE}/career/parse-cv`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Error procesando CV");
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      const p = data.profile;
+      if (p.full_name) setFullName(p.full_name);
+      if (p.email) setEmail(p.email);
+      if (p.phone) setPhone(p.phone);
+      if (p.location) setLocation(p.location);
+      if (p.linkedin_url) setLinkedin(p.linkedin_url);
+      if (p.portfolio_url) setPortfolio(p.portfolio_url);
+      if (p.github_url) setGithub(p.github_url);
+      if (p.cv_markdown) setCvMarkdown(p.cv_markdown);
+      if (p.target_roles) setTargetRoles(p.target_roles.join(", "));
+      if (p.title_positive) setTitlePositive(p.title_positive.join(", "));
+      if (p.title_negative) setTitleNegative(p.title_negative.join(", "));
+    } catch (e) {
+      alert("Error al procesar el CV");
+    } finally {
+      setParsing(false);
+    }
+  };
+
   const addPortal = async () => {
     if (!newCompany || !newUrl) return;
     const res = await fetch(`${BASE}/career/portals?session_id=${SESSION_ID}`, {
@@ -217,6 +249,45 @@ export default function CareerSetupPage() {
         {/* Profile Tab */}
         {tab === "profile" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 700 }}>
+            {/* Upload CV */}
+            <div style={{
+              padding: 24, borderRadius: 12, background: "#1E2225",
+              border: "2px dashed rgba(66,165,245,0.25)", textAlign: "center",
+              position: "relative",
+            }}>
+              <input
+                type="file"
+                accept=".pdf,.txt,.md,.doc,.docx"
+                onChange={e => { if (e.target.files?.[0]) uploadCV(e.target.files[0]); }}
+                disabled={parsing}
+                style={{
+                  position: "absolute", inset: 0, opacity: 0, cursor: "pointer",
+                  width: "100%", height: "100%",
+                }}
+              />
+              {parsing ? (
+                <>
+                  <Loader size={28} color="#42A5F5" style={{ animation: "spin 1s linear infinite" }} />
+                  <p style={{ color: "#42A5F5", fontSize: 14, fontWeight: 600, margin: "12px 0 4px" }}>
+                    Analizando tu CV con IA...
+                  </p>
+                  <p style={{ color: "#546E7A", fontSize: 12, margin: 0 }}>
+                    Extrayendo datos, skills, experiencia y generando perfil
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Upload size={28} color="#42A5F5" />
+                  <p style={{ color: "#ECEFF1", fontSize: 14, fontWeight: 600, margin: "12px 0 4px" }}>
+                    Sube tu CV para autocompletar el perfil
+                  </p>
+                  <p style={{ color: "#546E7A", fontSize: 12, margin: 0 }}>
+                    PDF, TXT o Markdown — la IA extraera todos los datos automaticamente
+                  </p>
+                </>
+              )}
+            </div>
+
             {/* Datos basicos */}
             <Section title="Datos basicos">
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
