@@ -14,8 +14,9 @@ RUN npm install --prefer-offline
 COPY career-ops/ .
 RUN npx playwright install chromium
 
-# Ensure data directories exist
-RUN mkdir -p data output reports jds interview-prep batch/tracker-additions
+# Ensure data directories exist and copy default portals
+RUN mkdir -p data output reports jds interview-prep batch/tracker-additions \
+    && cp templates/portals.example.yml portals.yml
 
 # API wrapper
 WORKDIR /career-api
