@@ -148,6 +148,22 @@ class CareerAgent(BaseAgent):
     # ─── SCAN ────────────────────────────────────────────────
 
     async def _scan(self, session_id: str, company: str = "") -> str:
+        # Verificar que tenga perfil configurado
+        from sqlalchemy import select
+        from app.db.postgres import SessionLocal
+        from app.models.career import CareerProfile
+
+        async with SessionLocal() as s:
+            profile = (await s.execute(
+                select(CareerProfile).where(CareerProfile.session_id == session_id)
+            )).scalar_one_or_none()
+
+        if not profile or not profile.cv_markdown:
+            return (
+                "No tienes perfil configurado para CareerOps. "
+                "Ve a la web → CareerOps → Configurar, sube tu CV y configura portales."
+            )
+
         # Call career container
         try:
             body = {}
@@ -161,6 +177,9 @@ class CareerAgent(BaseAgent):
             return "El contenedor career-ops no está disponible. Verifica que esté corriendo."
         except Exception as e:
             return f"Error al escanear: {e}"
+
+        if data.get("message"):
+            return data["message"]
 
         offers = data.get("offers", [])
         found = data.get("found", 0)

@@ -81,15 +81,31 @@ async function fetchUrlContent(url) {
 
 app.post('/scan', (req, res) => {
   try {
+    // Check if portals.yml exists
+    const portalsPath = resolve(CAREER_OPS, 'portals.yml');
+    if (!existsSync(portalsPath)) {
+      return res.json({
+        found: 0,
+        offers: [],
+        message: 'No hay portales configurados. Configura tu perfil y portales desde /career/setup primero.',
+      });
+    }
+
     const { company } = req.body || {};
     const args = company ? `--company "${company}"` : '';
     const cmd = `node ${resolve(CAREER_OPS, 'scan.mjs')} ${args}`;
 
-    const output = execSync(cmd, {
-      cwd: CAREER_OPS,
-      encoding: 'utf-8',
-      timeout: 120_000,
-    });
+    let output;
+    try {
+      output = execSync(cmd, {
+        cwd: CAREER_OPS,
+        encoding: 'utf-8',
+        timeout: 120_000,
+      });
+    } catch (execErr) {
+      // scan.mjs may exit with error but still produce output
+      output = execErr.stdout || '';
+    }
 
     // Parse scan output — scan.mjs prints summary lines
     const lines = output.trim().split('\n');
