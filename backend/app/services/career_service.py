@@ -95,8 +95,17 @@ async def _run_cycle(profile: CareerProfile):
     top_company = ""
     top_role = ""
 
-    # Limitar evaluaciones automáticas a las primeras 10 por ciclo
-    eval_candidates = [o for o in offers if o.get("url")][:10]
+    # Filtrar solo ofertas de engineering/desarrollo y limitar a 10 por ciclo
+    eng_keywords = {"engineer", "developer", "desarrollador", "architect", "lead", "software", "backend", "frontend", "full stack", "devops", "sre", "platform"}
+    eval_candidates = []
+    for o in offers:
+        if not o.get("url"):
+            continue
+        title_lower = (o.get("title") or "").lower()
+        if any(kw in title_lower for kw in eng_keywords):
+            eval_candidates.append(o)
+        if len(eval_candidates) >= 10:
+            break
 
     for offer in eval_candidates:
         try:

@@ -68,12 +68,22 @@ function buildSystemPrompt(modeFile) {
 
 async function fetchUrlContent(url) {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; career-api/1.0)' },
+      signal: controller.signal,
     });
-    return await res.text();
+    clearTimeout(timer);
+    let text = await res.text();
+    // Strip HTML tags and keep only text content, truncate to ~8000 chars
+    text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    text = text.replace(/<[^>]+>/g, ' ');
+    text = text.replace(/\s+/g, ' ').trim();
+    return text.slice(0, 8000);
   } catch (err) {
-    throw new Error(`Failed to fetch URL: ${err.message}`);
+    return ''; // Silently fail, use company+title fallback
   }
 }
 
