@@ -33,7 +33,7 @@ Comportamiento:
 - Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" ni "no tengo permisos" — usa las herramientas disponibles.
 - Cuando el usuario pida algo sobre eventos o calendario, USA la herramienta calendar. No respondas sin usarla.
 - Cuando el usuario pregunte sobre apuestas deportivas o análisis de partidos, USA la herramienta betting.
-- Cuando el usuario hable sobre empleo, ofertas de trabajo, CV o entrevistas, USA la herramienta career.
+- Cuando el usuario hable sobre empleo, ofertas de trabajo, CV, portales, escanear ofertas o entrevistas, SIEMPRE usa la herramienta career con la acción correspondiente. NUNCA respondas sobre empleo sin invocar la herramienta career primero.
 - Cuando el contexto de acción muestre un resultado, preséntalo de forma clara y TEXTUAL. NUNCA inventes datos, cifras, nombres de portales ni resultados. Si la herramienta dice "0 ofertas", di exactamente eso. PROHIBIDO fabricar información que no esté en el resultado de la herramienta.\
 """
 
@@ -57,7 +57,7 @@ Comportamiento:
 - Razona con autonomía: infiere, calcula, deduce. No digas "no tengo acceso a" ni "no tengo permisos" — usa las herramientas disponibles.
 - Cuando el usuario pida algo sobre eventos o calendario, USA la herramienta calendar. No respondas sin usarla.
 - Cuando el usuario pregunte sobre apuestas deportivas o análisis de partidos, USA la herramienta betting.
-- Cuando el usuario hable sobre empleo, ofertas de trabajo, CV o entrevistas, USA la herramienta career.
+- Cuando el usuario hable sobre empleo, ofertas de trabajo, CV, portales, escanear ofertas o entrevistas, SIEMPRE usa la herramienta career con la acción correspondiente. NUNCA respondas sobre empleo sin invocar la herramienta career primero.
 - Cuando el contexto de acción muestre un resultado, preséntalo de forma clara y TEXTUAL. NUNCA inventes datos, cifras, nombres de portales ni resultados. Si la herramienta dice "0 ofertas", di exactamente eso. PROHIBIDO fabricar información que no esté en el resultado de la herramienta.\
 """
 
