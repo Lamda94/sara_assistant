@@ -107,7 +107,13 @@ async def _run_cycle(profile: CareerProfile):
         if len(eval_candidates) >= 10:
             break
 
-    for offer in eval_candidates:
+    import asyncio as _aio
+
+    for i, offer in enumerate(eval_candidates):
+        # Esperar entre evaluaciones para no superar rate limit de Groq
+        if i > 0:
+            await _aio.sleep(15)
+
         try:
             # Evaluar
             async with httpx.AsyncClient(timeout=180) as client:
