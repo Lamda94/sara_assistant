@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { MessageSquare, Archive, Brain, Settings, Network, Shield, Users, LogOut, ClipboardCheck, TrendingUp } from "lucide-react";
+import { MessageSquare, Archive, Brain, Settings, Network, Shield, Users, LogOut, ClipboardCheck, TrendingUp, Briefcase } from "lucide-react";
 
 const NAV = [
   { href: "/",           icon: MessageSquare, label: "Conversación" },
@@ -10,6 +10,7 @@ const NAV = [
   { href: "/commitments", icon: ClipboardCheck, label: "Compromisos" },
   { href: "/knowledge",  icon: Network,       label: "Grafo"        },
   { href: "/betting",     icon: TrendingUp,    label: "SABE"         },
+  { href: "/career",      icon: Briefcase,     label: "CareerOps"    },
   { href: "/archives",   icon: Archive,       label: "Archivos"     },
   { href: "/parental",   icon: Shield,        label: "Dispositivos" },
   { href: "/settings",   icon: Settings,      label: "Ajustes"      },

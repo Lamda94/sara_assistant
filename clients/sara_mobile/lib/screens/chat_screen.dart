@@ -9,6 +9,7 @@ import 'package:audioplayers/audioplayers.dart';
 import '../api.dart';
 import '../monitoring/monitoring_setup_screen.dart';
 import 'betting_screen.dart';
+import 'career_screen.dart';
 import '../theme.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
@@ -346,6 +347,14 @@ class _ChatScreenState extends State<ChatScreen> {
             tooltip: 'SABE',
             onPressed: () => Navigator.push(
               context, MaterialPageRoute(builder: (_) => const BettingScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.work_outline, size: 20),
+            color: SaraColors.secondary,
+            tooltip: 'CareerOps',
+            onPressed: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const CareerScreen()),
             ),
           ),
           IconButton(
