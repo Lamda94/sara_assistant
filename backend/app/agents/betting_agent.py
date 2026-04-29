@@ -8,7 +8,7 @@ import logging
 import math
 from datetime import datetime, date
 
-from app.services.llm import llm_client, LLM_MODEL
+from app.services.llm import llm_chat, LLM_MODEL
 from app.config import settings
 from .base import BaseAgent
 
@@ -300,8 +300,8 @@ class BettingAgent(BaseAgent):
 
     async def _llm_analyze(self, context: str, sport: str) -> str:
         """Usa el LLM para generar el análisis predictivo."""
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("reasoning",
+
             messages=[
                 {
                     "role": "system",
@@ -329,8 +329,8 @@ class BettingAgent(BaseAgent):
                                 sport: str, event_name: str, session_id: str) -> str:
         """Intenta extraer una apuesta del análisis y registrarla como simulada."""
         # Extraer datos de la apuesta usando LLM
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("reasoning",
+
             messages=[
                 {
                     "role": "system",

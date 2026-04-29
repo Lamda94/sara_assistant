@@ -1,4 +1,4 @@
-from app.services.llm import llm_client, LLM_MODEL
+from app.services.llm import llm_chat, LLM_MODEL
 from app.config import settings
 from .base import BaseAgent
 
@@ -44,8 +44,8 @@ class CodeAgent(BaseAgent):
             user_content = f"{task}\n\n```{language}\n{code.strip()}\n```"
 
         try:
-            resp = await groq.chat.completions.create(
-                model=LLM_MODEL,
+            resp = await llm_chat("code",
+
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},

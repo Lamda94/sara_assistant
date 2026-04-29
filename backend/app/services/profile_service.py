@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from app.services.llm import llm_client, LLM_MODEL
+from app.services.llm import llm_chat, LLM_MODEL
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -66,8 +66,8 @@ async def generate_and_save_profile(session_id: str) -> None:
 
         sample = "\n".join(f"- {m[:200]}" for m in memories[-60:])
 
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("fast",
+
             messages=[
                 {
                     "role": "system",

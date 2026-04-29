@@ -9,7 +9,7 @@ import json
 import random
 from datetime import datetime, date
 
-from app.services.llm import llm_client, LLM_MODEL
+from app.services.llm import llm_chat, LLM_MODEL
 from sqlalchemy import select, func as sqlfunc
 
 from app.config import settings
@@ -139,8 +139,8 @@ async def _adjust_weights(loss_bets: list[SimBet]):
             f"Post-mortem: {b.post_mortem or 'N/A'}"
         )
 
-    resp = await llm_client.chat.completions.create(
-        model=LLM_MODEL,
+    resp = await llm_chat("reasoning",
+
         messages=[
             {
                 "role": "system",
@@ -313,8 +313,8 @@ async def _analyze_and_bet_multi(event: dict) -> int:
     context = "\n".join(context_parts)
 
     # LLM genera MÚLTIPLES apuestas por evento
-    resp = await llm_client.chat.completions.create(
-        model=LLM_MODEL,
+    resp = await llm_chat("reasoning",
+
         messages=[
             {
                 "role": "system",

@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 from datetime import datetime
-from app.services.llm import llm_client, LLM_MODEL
+from app.services.llm import llm_chat, LLM_MODEL
 from app.config import settings
 from app.services.mem0_service import mem0_search, mem0_add
 from app.services.profile_service import get_profile, increment_and_check, generate_and_save_profile
@@ -221,8 +221,8 @@ async def _db_list_reminders(session_id: str, day=None) -> str:
 async def _parse_modify(message: str) -> tuple[str, str] | None:
     """LLM extrae el título actual y el nuevo valor. Devuelve (old_title, new_title) o None."""
     try:
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("chat",
+
             messages=[
                 {
                     "role": "system",
@@ -313,8 +313,8 @@ async def _parse_reminder(message: str) -> tuple[str, datetime] | None:
     today_full = now.strftime("%A %d de %B de %Y, %H:%M")
     today_iso = now.strftime("%Y-%m-%d")
     try:
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("chat",
+
             messages=[
                 {
                     "role": "system",
@@ -520,8 +520,8 @@ async def chat(message: str, session_id: str, device: str = "cli",
     msgs.append({"role": "user", "content": message})
     tool_call_failed = False
     try:
-        response = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        response = await llm_chat("chat",
+
             messages=msgs,
             tools=TOOL_SCHEMAS,
             tool_choice="auto",
@@ -531,8 +531,8 @@ async def chat(message: str, session_id: str, device: str = "cli",
     except Exception:
         # Tool calling falló (modelo generó formato inválido) — fallback sin tools
         tool_call_failed = True
-        response = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        response = await llm_chat("chat",
+
             messages=msgs,
             temperature=0.7,
             max_tokens=600,
@@ -571,8 +571,8 @@ async def chat(message: str, session_id: str, device: str = "cli",
             "tool_call_id": tc.id,
             "content": tool_result,
         })
-        response2 = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        response2 = await llm_chat("chat",
+
             messages=msgs_followup,
             temperature=0.3,
             max_tokens=600,
@@ -603,8 +603,8 @@ async def chat(message: str, session_id: str, device: str = "cli",
                     )
                     agent_used = raw_tool_name
                     # Segunda llamada LLM para presentar resultado
-                    response3 = await llm_client.chat.completions.create(
-                        model=LLM_MODEL,
+                    response3 = await llm_chat("chat",
+
                         messages=[
                             {"role": "system", "content": system},
                             *history,

@@ -14,7 +14,7 @@ import logging
 import re
 import uuid
 
-from app.services.llm import llm_client, LLM_MODEL
+from app.services.llm import llm_chat, LLM_MODEL
 from app.config import settings
 from app.services.embedding_service import get_embedding
 
@@ -120,8 +120,8 @@ async def kg_extract_and_store(messages: list[dict], session_id: str) -> None:
     try:
         conversation = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in messages)
 
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("fast",
+
             messages=[
                 {
                     "role": "system",

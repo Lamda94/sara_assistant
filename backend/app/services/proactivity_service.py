@@ -15,7 +15,7 @@ import re
 from datetime import datetime, date, timedelta
 from typing import Optional
 
-from app.services.llm import llm_client, LLM_MODEL
+from app.services.llm import llm_chat, LLM_MODEL
 from sqlalchemy import select, func as sa_func, and_
 
 from app.config import settings
@@ -158,8 +158,8 @@ async def detect_inactive_topics(session_id: str) -> list[str]:
         recent_text = "\n".join(f"- {f}" for f in recent_facts[:20]) or "(ninguno reciente)"
         older_text = "\n".join(f"- {f}" for f in older_facts[:20])
 
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("fast",
+
             messages=[
                 {
                     "role": "system",
@@ -244,8 +244,8 @@ async def extract_commitments(
 
     today = datetime.now().strftime("%Y-%m-%d")
     try:
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("fast",
+
             messages=[
                 {
                     "role": "system",
@@ -395,8 +395,8 @@ async def generate_proactive_message(session_id: str, insights: list[dict]) -> s
     """Genera un mensaje push natural y breve a partir de los insights."""
     items = "\n".join(f"- [{i['type']}] {i['content']}" for i in insights)
     try:
-        resp = await llm_client.chat.completions.create(
-            model=LLM_MODEL,
+        resp = await llm_chat("fast",
+
             messages=[
                 {
                     "role": "system",

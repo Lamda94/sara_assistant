@@ -117,7 +117,7 @@ async def consolidate_memories(session_id: str | None = None) -> dict:
     Si session_id se proporciona, solo fusiona memorias de ese usuario.
     Retorna estadísticas de la consolidación.
     """
-    from app.services.llm import llm_client, LLM_MODEL
+    from app.services.llm import llm_chat, LLM_MODEL
 
     groq = llm_client
 
@@ -169,8 +169,8 @@ async def consolidate_memories(session_id: str | None = None) -> dict:
         combined = "\n".join(f"- {c}" for c in contents)
 
         try:
-            resp = await groq.chat.completions.create(
-                model=LLM_MODEL,
+            resp = await llm_chat("fast",
+
                 messages=[
                     {
                         "role": "system",
@@ -276,7 +276,7 @@ async def extract_user_profile(session_id: str) -> str:
     Analiza las memorias del usuario y extrae un perfil de preferencias y patrones.
     Guarda el perfil como memoria especial.
     """
-    from app.services.llm import llm_client, LLM_MODEL
+    from app.services.llm import llm_chat, LLM_MODEL
     from app.config import settings as s
 
     groq = llm_client
@@ -298,7 +298,8 @@ async def extract_user_profile(session_id: str) -> str:
 
     sample = "\n".join(f"- {m}" for m in user_messages[-30:])
 
-    resp = await groq.chat.completions.create(
+    resp = await llm_chat("fast",
+
         model=s.groq_model,
         messages=[
             {

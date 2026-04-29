@@ -13,7 +13,7 @@ import logging
 import time
 from datetime import datetime, date, timedelta, timezone
 
-from app.services.llm import llm_client, LLM_MODEL
+from app.services.llm import llm_chat, LLM_MODEL
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -52,8 +52,8 @@ async def generate_daily_summary(session_id: str) -> str | None:
 
     facts_text = "\n".join(f"- {f}" for f in today_facts)
 
-    resp = await llm_client.chat.completions.create(
-        model=LLM_MODEL,
+    resp = await llm_chat("fast",
+
         messages=[
             {
                 "role": "system",
