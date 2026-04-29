@@ -1,4 +1,4 @@
-from groq import AsyncGroq
+from app.services.llm import llm_client, LLM_MODEL
 from app.config import settings
 from .base import BaseAgent
 
@@ -30,7 +30,7 @@ class CodeAgent(BaseAgent):
     }
 
     async def run(self, task: str, language: str = "python", code: str = "", **_) -> str:
-        groq = AsyncGroq(api_key=settings.groq_api_key)
+        groq = llm_client
 
         system = (
             f"Eres un experto programador especializado en {language}. "
@@ -45,7 +45,7 @@ class CodeAgent(BaseAgent):
 
         try:
             resp = await groq.chat.completions.create(
-                model=settings.groq_model,
+                model=LLM_MODEL,
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},

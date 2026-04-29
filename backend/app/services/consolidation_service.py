@@ -13,11 +13,11 @@ import logging
 import time
 from datetime import datetime, date, timedelta, timezone
 
-from groq import AsyncGroq
+from app.services.llm import llm_client, LLM_MODEL
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-groq_client = AsyncGroq(api_key=settings.groq_api_key)
+# llm_client importado desde app.services.llm
 
 
 async def get_active_users() -> list[str]:
@@ -52,8 +52,8 @@ async def generate_daily_summary(session_id: str) -> str | None:
 
     facts_text = "\n".join(f"- {f}" for f in today_facts)
 
-    resp = await groq_client.chat.completions.create(
-        model=settings.groq_model,
+    resp = await llm_client.chat.completions.create(
+        model=LLM_MODEL,
         messages=[
             {
                 "role": "system",

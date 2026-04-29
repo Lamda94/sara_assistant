@@ -9,7 +9,7 @@ import json
 import random
 from datetime import datetime, date
 
-from groq import AsyncGroq
+from app.services.llm import llm_client, LLM_MODEL
 from sqlalchemy import select, func as sqlfunc
 
 from app.config import settings
@@ -17,7 +17,7 @@ from app.db.postgres import SessionLocal
 from app.models.betting import SimBet, SabeBankroll, SabeModelMetrics
 
 logger = logging.getLogger(__name__)
-_groq = AsyncGroq(api_key=settings.groq_api_key)
+# llm_client importado desde app.services.llm
 
 # Deportes a escanear en rotación
 _SPORTS = [
@@ -139,8 +139,8 @@ async def _adjust_weights(loss_bets: list[SimBet]):
             f"Post-mortem: {b.post_mortem or 'N/A'}"
         )
 
-    resp = await _groq.chat.completions.create(
-        model=settings.groq_model,
+    resp = await llm_client.chat.completions.create(
+        model=LLM_MODEL,
         messages=[
             {
                 "role": "system",
@@ -313,8 +313,8 @@ async def _analyze_and_bet_multi(event: dict) -> int:
     context = "\n".join(context_parts)
 
     # LLM genera MÚLTIPLES apuestas por evento
-    resp = await _groq.chat.completions.create(
-        model=settings.groq_model,
+    resp = await llm_client.chat.completions.create(
+        model=LLM_MODEL,
         messages=[
             {
                 "role": "system",

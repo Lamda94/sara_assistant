@@ -14,12 +14,12 @@ import logging
 import re
 import uuid
 
-from groq import AsyncGroq
+from app.services.llm import llm_client, LLM_MODEL
 from app.config import settings
 from app.services.embedding_service import get_embedding
 
 logger = logging.getLogger(__name__)
-groq_client = AsyncGroq(api_key=settings.groq_api_key)
+# llm_client importado desde app.services.llm
 
 _KG_COLLECTION = "sara_knowledge"
 
@@ -120,8 +120,8 @@ async def kg_extract_and_store(messages: list[dict], session_id: str) -> None:
     try:
         conversation = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in messages)
 
-        resp = await groq_client.chat.completions.create(
-            model=settings.groq_model,
+        resp = await llm_client.chat.completions.create(
+            model=LLM_MODEL,
             messages=[
                 {
                     "role": "system",

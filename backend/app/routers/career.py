@@ -388,11 +388,11 @@ async def parse_cv(request: Request, file: UploadFile = File(...)):
     if not cv_text or len(cv_text.strip()) < 50:
         return {"error": "No se pudo extraer texto del archivo"}
 
-    from groq import AsyncGroq
-    groq = AsyncGroq(api_key=settings.groq_api_key)
+    from app.services.llm import llm_client, LLM_MODEL
+    groq = llm_client
 
     resp = await groq.chat.completions.create(
-        model=settings.groq_model,
+        model=LLM_MODEL,
         messages=[
             {
                 "role": "system",

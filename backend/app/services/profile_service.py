@@ -1,11 +1,11 @@
 import logging
 from datetime import datetime
 
-from groq import AsyncGroq
+from app.services.llm import llm_client, LLM_MODEL
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-groq_client = AsyncGroq(api_key=settings.groq_api_key)
+# llm_client importado desde app.services.llm
 
 # Cada cuántas conversaciones se regenera el perfil
 _UPDATE_EVERY = 10
@@ -66,8 +66,8 @@ async def generate_and_save_profile(session_id: str) -> None:
 
         sample = "\n".join(f"- {m[:200]}" for m in memories[-60:])
 
-        resp = await groq_client.chat.completions.create(
-            model=settings.groq_model,
+        resp = await llm_client.chat.completions.create(
+            model=LLM_MODEL,
             messages=[
                 {
                     "role": "system",

@@ -4,14 +4,14 @@ Servicio SABE — Jobs programados para resolver apuestas y generar briefings.
 import logging
 from datetime import datetime, date
 
-from groq import AsyncGroq
+from app.services.llm import llm_client, LLM_MODEL
 from sqlalchemy import select
 from app.config import settings
 from app.db.postgres import SessionLocal
 from app.models.betting import SimBet, SabeBankroll, SabeModelMetrics
 
 logger = logging.getLogger(__name__)
-_groq = AsyncGroq(api_key=settings.groq_api_key)
+# llm_client importado desde app.services.llm
 
 
 async def resolve_pending_bets():
@@ -122,8 +122,8 @@ async def _resolve_via_search(bet: SimBet) -> str | None:
     query = f"resultado {bet.event_name} {bet.event_date.strftime('%d/%m/%Y')}"
     search_result = await searcher.run(query=query, max_results=3)
 
-    resp = await _groq.chat.completions.create(
-        model=settings.groq_model,
+    resp = await llm_client.chat.completions.create(
+        model=LLM_MODEL,
         messages=[
             {
                 "role": "system",
@@ -190,8 +190,8 @@ def _check_bet_result(bet: SimBet, game: dict) -> str:
 
 async def _generate_post_mortem(bet: SimBet) -> str:
     """Genera análisis post-mortem de una apuesta perdida."""
-    resp = await _groq.chat.completions.create(
-        model=settings.groq_model,
+    resp = await llm_client.chat.completions.create(
+        model=LLM_MODEL,
         messages=[
             {
                 "role": "system",

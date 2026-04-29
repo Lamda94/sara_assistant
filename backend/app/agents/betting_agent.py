@@ -8,12 +8,12 @@ import logging
 import math
 from datetime import datetime, date
 
-from groq import AsyncGroq
+from app.services.llm import llm_client, LLM_MODEL
 from app.config import settings
 from .base import BaseAgent
 
 logger = logging.getLogger(__name__)
-_groq = AsyncGroq(api_key=settings.groq_api_key)
+# llm_client importado desde app.services.llm
 
 
 class BettingAgent(BaseAgent):
@@ -300,8 +300,8 @@ class BettingAgent(BaseAgent):
 
     async def _llm_analyze(self, context: str, sport: str) -> str:
         """Usa el LLM para generar el análisis predictivo."""
-        resp = await _groq.chat.completions.create(
-            model=settings.groq_model,
+        resp = await llm_client.chat.completions.create(
+            model=LLM_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -329,8 +329,8 @@ class BettingAgent(BaseAgent):
                                 sport: str, event_name: str, session_id: str) -> str:
         """Intenta extraer una apuesta del análisis y registrarla como simulada."""
         # Extraer datos de la apuesta usando LLM
-        resp = await _groq.chat.completions.create(
-            model=settings.groq_model,
+        resp = await llm_client.chat.completions.create(
+            model=LLM_MODEL,
             messages=[
                 {
                     "role": "system",
