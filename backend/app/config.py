@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     sports_api_key: str = ""
     weather_api_key: str = ""
 
+    # --- SecOps Agent (Fase 1 — solo lectura) ---
+    secops_daemon_url: str = "http://172.18.0.1:9900"
+    secops_token: str = ""            # vacío = agente SecOps deshabilitado
+    secops_report_cron_hour: int = 8  # hora del resumen diario de seguridad
+
     # --- Consolidation (Phase 4.2) ---
     consolidation_similarity_threshold: float = 0.88
     consolidation_max_points_per_user: int = 500

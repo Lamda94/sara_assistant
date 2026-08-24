@@ -104,6 +104,41 @@ async def proactive_check():
         logger.error(f"proactive_check error general: {e}")
 
 
+async def secops_daily_report():
+    """Job diario — genera el resumen de seguridad de la VPS y lo envía como push al creador."""
+    from sqlalchemy import select
+    from app.db.postgres import SessionLocal
+    from app.models.device_token import DeviceToken
+    from app.config import settings as cfg
+    from app.services import secops_service
+    from app.agents.secops_agent import SecOpsAgent
+
+    if not _firebase_ok or not secops_service.is_enabled():
+        return
+
+    try:
+        agent = SecOpsAgent()
+        report = await agent.run(operation="report", session_id=cfg.creator_id)
+
+        async with SessionLocal() as s:
+            r = await s.execute(
+                select(DeviceToken).where(DeviceToken.session_id.ilike(f"%{cfg.creator_id}%"))
+            )
+            tokens = r.scalars().all()
+
+        if not tokens:
+            logger.warning("[SecOps] Resumen diario generado pero el creador no tiene device token registrado")
+            return
+
+        summary = report if len(report) <= 500 else report[:497] + "..."
+        for token_row in tokens:
+            sent = await _send_push(token_row.token, "🛡️ Resumen de seguridad", summary)
+            if sent:
+                logger.info(f"[SecOps] Resumen diario enviado a {token_row.session_id}")
+    except Exception as e:
+        logger.error(f"[SecOps] Error en resumen diario: {e}")
+
+
 async def check_and_fire_reminders():
     """Revisa recordatorios vencidos y envía notificaciones push."""
     from sqlalchemy import select
@@ -232,9 +267,18 @@ def start_scheduler():
         replace_existing=True,
     )
 
+    # SecOps — Resumen diario de seguridad de la VPS (Fase 1, solo lectura)
+    scheduler.add_job(
+        secops_daily_report,
+        trigger=CronTrigger(hour=cfg.secops_report_cron_hour, minute=0, timezone="America/Bogota"),
+        id="secops_daily_report",
+        replace_existing=True,
+    )
+
     scheduler.start()
     logger.info(
         f"Scheduler iniciado: recordatorios (30s) + proactividad ({cfg.proactive_check_interval_hours}h) "
-        f"+ consolidación (3am) + SABE resolver (2h) + SABE training (3h) + SABE briefing (8am) + CareerOps (6h)"
+        f"+ consolidación (3am) + SABE resolver (2h) + SABE training (3h) + SABE briefing (8am) "
+        f"+ CareerOps (6h) + SecOps briefing ({cfg.secops_report_cron_hour}am)"
     )
     return scheduler

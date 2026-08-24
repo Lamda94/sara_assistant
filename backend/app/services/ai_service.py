@@ -425,6 +425,8 @@ async def _dispatch_tool_call(
         tool_args["session_id"] = session_id
     if tool_name == "career":
         tool_args["session_id"] = session_id
+    if tool_name == "secops":
+        tool_args["session_id"] = session_id
 
     try:
         return await agent.run(**tool_args)
